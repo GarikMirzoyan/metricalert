@@ -126,3 +126,32 @@ func TestCounterUpdate(t *testing.T) {
 		t.Errorf("expected counter value 25, got %d", value.Value)
 	}
 }
+
+func TestRootHandler(t *testing.T) {
+	storage := NewMemStorage()
+	server := NewServer(storage)
+
+	// Update some metrics
+	server.UpdateHandler(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/update/gauge/TestGauge/1.23", nil))
+	server.UpdateHandler(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/update/counter/TestCounter/5", nil))
+
+	// Now test root handler
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	server.RootHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	expectedBody := "<!DOCTYPE html>" // Basic check to ensure the response body starts with expected HTML
+	if !stringContains(rec.Body.String(), expectedBody) {
+		t.Errorf("expected body to start with '%s', but got '%s'", expectedBody, rec.Body.String())
+	}
+}
+
+// Helper function to check if a string contains a substring
+func stringContains(str, substr string) bool {
+	return len(str) >= len(substr) && str[:len(substr)] == substr
+}
