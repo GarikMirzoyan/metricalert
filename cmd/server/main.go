@@ -54,6 +54,8 @@ func NewServer(storage *MemStorage) *Server {
 }
 
 func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("Received request: %s\n", r.URL.Path)
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
