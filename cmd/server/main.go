@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"html/template"
+	"math"
 	"net/http"
 	"strconv"
 
@@ -99,6 +100,11 @@ func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
+func round(value float64, precision int) float64 {
+	factor := math.Pow(10, float64(precision))
+	return math.Round(value*factor) / factor
+}
+
 func (s *Server) GetValueHandler(w http.ResponseWriter, r *http.Request) {
 	metricType := chi.URLParam(r, "type")
 	metricName := chi.URLParam(r, "name")
@@ -111,8 +117,9 @@ func (s *Server) GetValueHandler(w http.ResponseWriter, r *http.Request) {
 	switch MetricType(metricType) {
 	case Gauge:
 		if metric, exists := s.storage.GetGauge(metricName); exists {
+			roundedValue := round(metric.Value, 3)
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(fmt.Sprintf("%f", metric.Value)))
+			w.Write([]byte(fmt.Sprintf("%.3f", roundedValue)))
 		} else {
 			http.Error(w, "Metric not found", http.StatusNotFound)
 		}
