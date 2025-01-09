@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"net/http"
 	"strconv"
-	"strings"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type MetricType string
@@ -45,6 +47,16 @@ func (ms *MemStorage) UpdateCounter(name string, value int64) {
 	ms.counters[name] = CounterMetric{Value: value}
 }
 
+func (ms *MemStorage) GetGauge(name string) (GaugeMetric, bool) {
+	metric, exists := ms.gauges[name]
+	return metric, exists
+}
+
+func (ms *MemStorage) GetCounter(name string) (CounterMetric, bool) {
+	metric, exists := ms.counters[name]
+	return metric, exists
+}
+
 type Server struct {
 	storage *MemStorage
 }
@@ -54,20 +66,10 @@ func NewServer(storage *MemStorage) *Server {
 }
 
 func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("Received request: %s\n", r.URL.Path)
+	metricType := chi.URLParam(r, "type")
+	metricName := chi.URLParam(r, "name")
+	metricValue := chi.URLParam(r, "value")
 
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/update/"), "/")
-	if len(parts) != 3 {
-		http.Error(w, "Not Found", http.StatusNotFound)
-		return
-	}
-
-	metricType, metricName, metricValue := parts[0], parts[1], parts[2]
 	if metricName == "" {
 		http.Error(w, "Metric name not provided", http.StatusNotFound)
 		return
@@ -97,14 +99,87 @@ func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
+func (s *Server) GetValueHandler(w http.ResponseWriter, r *http.Request) {
+	metricType := chi.URLParam(r, "type")
+	metricName := chi.URLParam(r, "name")
+
+	if metricName == "" {
+		http.Error(w, "Metric name not provided", http.StatusNotFound)
+		return
+	}
+
+	switch MetricType(metricType) {
+	case Gauge:
+		if metric, exists := s.storage.GetGauge(metricName); exists {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(fmt.Sprintf("%f", metric.Value)))
+		} else {
+			http.Error(w, "Metric not found", http.StatusNotFound)
+		}
+	case Counter:
+		if metric, exists := s.storage.GetCounter(metricName); exists {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(fmt.Sprintf("%d", metric.Value)))
+		} else {
+			http.Error(w, "Metric not found", http.StatusNotFound)
+		}
+	default:
+		http.Error(w, "Invalid metric type", http.StatusBadRequest)
+	}
+}
+
+func (s *Server) RootHandler(w http.ResponseWriter, r *http.Request) {
+	tmpl := `
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Metrics</title>
+</head>
+<body>
+	<h1>Metrics</h1>
+	<ul>
+	{{range $key, $value := .Gauges}}
+		<li>{{$key}}: {{$value}}</li>
+	{{end}}
+	{{range $key, $value := .Counters}}
+		<li>{{$key}}: {{$value}}</li>
+	{{end}}
+	</ul>
+</body>
+</html>
+`
+	data := struct {
+		Gauges   map[string]float64
+		Counters map[string]int64
+	}{
+		Gauges:   make(map[string]float64),
+		Counters: make(map[string]int64),
+	}
+
+	for name, metric := range s.storage.gauges {
+		data.Gauges[name] = metric.Value
+	}
+
+	for name, metric := range s.storage.counters {
+		data.Counters[name] = metric.Value
+	}
+
+	t := template.Must(template.New("metrics").Parse(tmpl))
+	t.Execute(w, data)
+}
+
 func main() {
 	storage := NewMemStorage()
 	server := NewServer(storage)
 
-	http.HandleFunc("/update/", server.UpdateHandler)
+	r := chi.NewRouter()
+
+	r.Post("/update/{type}/{name}/{value}", server.UpdateHandler)
+	r.Get("/value/{type}/{name}", server.GetValueHandler)
+	r.Get("/", server.RootHandler)
 
 	fmt.Println("Starting server at :8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	if err := http.ListenAndServe(":8080", r); err != nil {
 		fmt.Printf("Error starting server: %v\n", err)
 	}
 }
