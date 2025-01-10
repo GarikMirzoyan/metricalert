@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"html/template"
 	"math"
@@ -176,6 +177,9 @@ func (s *Server) RootHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	address := flag.String("a", "localhost:8080", "HTTP server address")
+	flag.Parse()
+
 	storage := NewMemStorage()
 	server := NewServer(storage)
 
@@ -185,8 +189,8 @@ func main() {
 	r.Get("/value/{type}/{name}", server.GetValueHandler)
 	r.Get("/", server.RootHandler)
 
-	fmt.Println("Starting server at :8080")
-	if err := http.ListenAndServe(":8080", r); err != nil {
+	fmt.Printf("Starting server at %s\n", *address)
+	if err := http.ListenAndServe(*address, r); err != nil {
 		fmt.Printf("Error starting server: %v\n", err)
 	}
 }
