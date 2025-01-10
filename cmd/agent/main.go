@@ -86,9 +86,13 @@ func main() {
 	reportIntervalEnv := os.Getenv("REPORT_INTERVAL")
 	pollIntervalEnv := os.Getenv("POLL_INTERVAL")
 
-	address := flag.String("a", addressEnv, "HTTP server address (without http:// or https://)")
-	reportInterval := flag.Int("r", 10, "Report interval in seconds")
-	pollInterval := flag.Int("p", 2, "Poll interval in seconds")
+	defaultAddress := "localhost:8080"
+	defaultReportInterval := 10
+	defaultPollInterval := 2
+
+	address := flag.String("a", defaultAddress, "HTTP server address (without http:// or https://)")
+	reportInterval := flag.Int("r", defaultReportInterval, "Report interval in seconds")
+	pollInterval := flag.Int("p", defaultPollInterval, "Poll interval in seconds")
 	flag.Parse()
 
 	if addressEnv != "" {

@@ -181,7 +181,9 @@ func (s *Server) RootHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	addressEnv := os.Getenv("ADDRESS")
 
-	address := flag.String("a", addressEnv, "HTTP server address (without http:// or https://)")
+	defaultAddress := "localhost:8080"
+
+	address := flag.String("a", defaultAddress, "HTTP server address (without http:// or https://)")
 	flag.Parse()
 
 	if addressEnv != "" {
