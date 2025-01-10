@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -120,7 +121,7 @@ func (s *Server) GetValueHandler(w http.ResponseWriter, r *http.Request) {
 		if metric, exists := s.storage.GetGauge(metricName); exists {
 			roundedValue := round(metric.Value, 3)
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(fmt.Sprintf("%.3f", roundedValue)))
+			w.Write([]byte(strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.3f", roundedValue), "0"), ".")))
 		} else {
 			http.Error(w, "Metric not found", http.StatusNotFound)
 		}
