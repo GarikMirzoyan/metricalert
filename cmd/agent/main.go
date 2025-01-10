@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -81,10 +82,30 @@ func (a *Agent) Run() {
 }
 
 func main() {
-	address := flag.String("a", "http://localhost:8080", "HTTP server address")
+	addressEnv := os.Getenv("ADDRESS")
+	reportIntervalEnv := os.Getenv("REPORT_INTERVAL")
+	pollIntervalEnv := os.Getenv("POLL_INTERVAL")
+
+	address := flag.String("a", addressEnv, "HTTP server address (without http:// or https://)")
 	reportInterval := flag.Int("r", 10, "Report interval in seconds")
 	pollInterval := flag.Int("p", 2, "Poll interval in seconds")
 	flag.Parse()
+
+	if addressEnv != "" {
+		*address = addressEnv
+	}
+
+	if reportIntervalEnv != "" {
+		if ri, err := time.ParseDuration(reportIntervalEnv + "s"); err == nil {
+			*reportInterval = int(ri.Seconds())
+		}
+	}
+
+	if pollIntervalEnv != "" {
+		if pi, err := time.ParseDuration(pollIntervalEnv + "s"); err == nil {
+			*pollInterval = int(pi.Seconds())
+		}
+	}
 
 	if !strings.HasPrefix(*address, "http://") && !strings.HasPrefix(*address, "https://") {
 		*address = "http://" + *address

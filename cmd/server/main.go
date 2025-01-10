@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -178,20 +179,25 @@ func (s *Server) RootHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	address := flag.String("a", "localhost:8080", "HTTP server address")
+	addressEnv := os.Getenv("ADDRESS")
+
+	address := flag.String("a", addressEnv, "HTTP server address (without http:// or https://)")
 	flag.Parse()
 
-	storage := NewMemStorage()
-	server := NewServer(storage)
+	if addressEnv != "" {
+		*address = addressEnv
+	}
 
-	r := chi.NewRouter()
+	if !strings.HasPrefix(*address, "http://") && !strings.HasPrefix(*address, "https://") {
+		*address = "http://" + *address
+	}
 
-	r.Post("/update/{type}/{name}/{value}", server.UpdateHandler)
-	r.Get("/value/{type}/{name}", server.GetValueHandler)
-	r.Get("/", server.RootHandler)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "Server running at %s", *address)
+	})
 
-	fmt.Printf("Starting server at %s\n", *address)
-	if err := http.ListenAndServe(*address, r); err != nil {
-		fmt.Printf("Error starting server: %v\n", err)
+	fmt.Printf("Starting server at %s...\n", *address)
+	if err := http.ListenAndServe(strings.TrimPrefix(*address, "http://"), nil); err != nil {
+		fmt.Println("Error starting server:", err)
 	}
 }
