@@ -190,10 +190,6 @@ func main() {
 		*address = addressEnv
 	}
 
-	if !strings.HasPrefix(*address, "http://") && !strings.HasPrefix(*address, "https://") {
-		*address = "http://" + *address
-	}
-
 	storage := NewMemStorage()
 	server := NewServer(storage)
 
@@ -203,8 +199,8 @@ func main() {
 	r.Get("/value/{type}/{name}", server.GetValueHandler)
 	r.Get("/", server.RootHandler)
 
-	fmt.Printf("Starting server at %s...\n", *address)
-	if err := http.ListenAndServe(strings.TrimPrefix(*address, "http://"), nil); err != nil {
-		fmt.Println("Error starting server:", err)
+	fmt.Printf("Starting server at %s\n", *address)
+	if err := http.ListenAndServe(*address, r); err != nil {
+		fmt.Printf("Error starting server: %v\n", err)
 	}
 }
