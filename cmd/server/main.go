@@ -194,9 +194,14 @@ func main() {
 		*address = "http://" + *address
 	}
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Server running at %s", *address)
-	})
+	storage := NewMemStorage()
+	server := NewServer(storage)
+
+	r := chi.NewRouter()
+
+	r.Post("/update/{type}/{name}/{value}", server.UpdateHandler)
+	r.Get("/value/{type}/{name}", server.GetValueHandler)
+	r.Get("/", server.RootHandler)
 
 	fmt.Printf("Starting server at %s...\n", *address)
 	if err := http.ListenAndServe(strings.TrimPrefix(*address, "http://"), nil); err != nil {
