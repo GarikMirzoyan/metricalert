@@ -4,10 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	"math"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/go-chi/chi/v5"
@@ -110,9 +110,17 @@ func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
-func round(value float64, precision int) float64 {
-	factor := math.Pow(10, float64(precision))
-	return math.Round(value*factor) / factor
+func formatNumber(num float64) string {
+	// Округляем число до 3 знаков после запятой
+	rounded := strconv.FormatFloat(num, 'f', 3, 64)
+
+	// Убираем лишние нули в конце
+	rounded = strings.TrimRight(rounded, "0")
+
+	// Убираем точку, если нет чисел после неё
+	rounded = strings.TrimRight(rounded, ".")
+
+	return rounded
 }
 
 func (s *Server) GetValueHandler(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +136,7 @@ func (s *Server) GetValueHandler(w http.ResponseWriter, r *http.Request) {
 	case Gauge:
 		if metric, exists := s.storage.GetGauge(metricName); exists {
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, strconv.FormatFloat(metric.Value, 'f', 3, 64))
+			fmt.Fprint(w, formatNumber(metric.Value))
 		} else {
 			http.Error(w, "Metric not found", http.StatusNotFound)
 		}
