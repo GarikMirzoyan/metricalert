@@ -71,7 +71,9 @@ type Server struct {
 }
 
 func NewServer(storage *MemStorage) *Server {
-	return &Server{storage: storage}
+	server := &Server{storage: storage}
+	server.InitTemplate()
+	return server
 }
 
 func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
@@ -200,8 +202,6 @@ func main() {
 
 	storage := NewMemStorage()
 	server := NewServer(storage)
-
-	server.InitTemplate()
 
 	r := chi.NewRouter()
 
