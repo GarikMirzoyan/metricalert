@@ -21,6 +21,53 @@ type Agent struct {
 	pollCount      Counter
 }
 
+type Config struct {
+	Address        string
+	ReportInterval time.Duration
+	PollInterval   time.Duration
+}
+
+func initConfig() Config {
+	// Значения по умолчанию
+	defaultAddress := "localhost:8080"
+	defaultReportInterval := 10 * time.Second
+	defaultPollInterval := 2 * time.Second
+
+	// Читаем флаги командной строки
+	address := flag.String("a", defaultAddress, "HTTP server address (without http:// or https://)")
+	reportInterval := flag.Int("r", int(defaultReportInterval.Seconds()), "Report interval in seconds")
+	pollInterval := flag.Int("p", int(defaultPollInterval.Seconds()), "Poll interval in seconds")
+	flag.Parse()
+
+	// Читаем переменные окружения
+	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
+		*address = envAddress
+	}
+
+	if envReportInterval := os.Getenv("REPORT_INTERVAL"); envReportInterval != "" {
+		if ri, err := time.ParseDuration(envReportInterval + "s"); err == nil {
+			*reportInterval = int(ri.Seconds())
+		}
+	}
+
+	if envPollInterval := os.Getenv("POLL_INTERVAL"); envPollInterval != "" {
+		if pi, err := time.ParseDuration(envPollInterval + "s"); err == nil {
+			*pollInterval = int(pi.Seconds())
+		}
+	}
+
+	finalAddress := *address
+	if !strings.HasPrefix(finalAddress, "http://") && !strings.HasPrefix(finalAddress, "https://") {
+		finalAddress = "http://" + finalAddress
+	}
+
+	return Config{
+		Address:        finalAddress,
+		ReportInterval: time.Duration(*reportInterval) * time.Second,
+		PollInterval:   time.Duration(*pollInterval) * time.Second,
+	}
+}
+
 func NewAgent(serverAddress string, pollInterval, reportInterval time.Duration) *Agent {
 	return &Agent{
 		serverAddress:  serverAddress,
@@ -82,39 +129,8 @@ func (a *Agent) Run() {
 }
 
 func main() {
-	addressEnv := os.Getenv("ADDRESS")
-	reportIntervalEnv := os.Getenv("REPORT_INTERVAL")
-	pollIntervalEnv := os.Getenv("POLL_INTERVAL")
+	config := initConfig()
 
-	defaultAddress := "localhost:8080"
-	defaultReportInterval := 10
-	defaultPollInterval := 2
-
-	address := flag.String("a", defaultAddress, "HTTP server address (without http:// or https://)")
-	reportInterval := flag.Int("r", defaultReportInterval, "Report interval in seconds")
-	pollInterval := flag.Int("p", defaultPollInterval, "Poll interval in seconds")
-	flag.Parse()
-
-	if addressEnv != "" {
-		*address = addressEnv
-	}
-
-	if reportIntervalEnv != "" {
-		if ri, err := time.ParseDuration(reportIntervalEnv + "s"); err == nil {
-			*reportInterval = int(ri.Seconds())
-		}
-	}
-
-	if pollIntervalEnv != "" {
-		if pi, err := time.ParseDuration(pollIntervalEnv + "s"); err == nil {
-			*pollInterval = int(pi.Seconds())
-		}
-	}
-
-	if !strings.HasPrefix(*address, "http://") && !strings.HasPrefix(*address, "https://") {
-		*address = "http://" + *address
-	}
-
-	agent := NewAgent(*address, time.Duration(*pollInterval)*time.Second, time.Duration(*reportInterval)*time.Second)
+	agent := NewAgent(config.Address, config.PollInterval, config.ReportInterval)
 	agent.Run()
 }

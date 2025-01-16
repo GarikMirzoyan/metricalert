@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -31,6 +31,7 @@ type CounterMetric struct {
 type MemStorage struct {
 	gauges   map[string]GaugeMetric
 	counters map[string]CounterMetric
+	mu       sync.Mutex
 }
 
 func NewMemStorage() *MemStorage {
@@ -45,6 +46,9 @@ func (ms *MemStorage) UpdateGauge(name string, value float64) {
 }
 
 func (ms *MemStorage) UpdateCounter(name string, value int64) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
 	if existing, exists := ms.counters[name]; exists {
 		value += existing.Value
 	}
@@ -63,6 +67,7 @@ func (ms *MemStorage) GetCounter(name string) (CounterMetric, bool) {
 
 type Server struct {
 	storage *MemStorage
+	tmpl    *template.Template
 }
 
 func NewServer(storage *MemStorage) *Server {
@@ -120,16 +125,15 @@ func (s *Server) GetValueHandler(w http.ResponseWriter, r *http.Request) {
 	switch MetricType(metricType) {
 	case Gauge:
 		if metric, exists := s.storage.GetGauge(metricName); exists {
-			roundedValue := round(metric.Value, 3)
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.3f", roundedValue), "0"), ".")))
+			fmt.Fprint(w, strconv.FormatFloat(metric.Value, 'f', 3, 64))
 		} else {
 			http.Error(w, "Metric not found", http.StatusNotFound)
 		}
 	case Counter:
 		if metric, exists := s.storage.GetCounter(metricName); exists {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(fmt.Sprintf("%d", metric.Value)))
+			w.Write([]byte(strconv.Itoa(int(metric.Value))))
 		} else {
 			http.Error(w, "Metric not found", http.StatusNotFound)
 		}
@@ -138,26 +142,31 @@ func (s *Server) GetValueHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) RootHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) InitTemplate() {
 	tmpl := `
-<!DOCTYPE html>
-<html>
-<head>
-	<title>Metrics</title>
-</head>
-<body>
-	<h1>Metrics</h1>
-	<ul>
-	{{range $key, $value := .Gauges}}
-		<li>{{$key}}: {{$value}}</li>
-	{{end}}
-	{{range $key, $value := .Counters}}
-		<li>{{$key}}: {{$value}}</li>
-	{{end}}
-	</ul>
-</body>
-</html>
-`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Metrics</title>
+        </head>
+        <body>
+            <h1>Metrics</h1>
+            <ul>
+            {{range $key, $value := .Gauges}}
+                <li>{{$key}}: {{$value}}</li>
+            {{end}}
+            {{range $key, $value := .Counters}}
+                <li>{{$key}}: {{$value}}</li>
+            {{end}}
+            </ul>
+        </body>
+        </html>
+    `
+	// Парсим шаблон один раз
+	s.tmpl = template.Must(template.New("metrics").Parse(tmpl))
+}
+
+func (s *Server) RootHandler(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		Gauges   map[string]float64
 		Counters map[string]int64
@@ -174,8 +183,7 @@ func (s *Server) RootHandler(w http.ResponseWriter, r *http.Request) {
 		data.Counters[name] = metric.Value
 	}
 
-	t := template.Must(template.New("metrics").Parse(tmpl))
-	t.Execute(w, data)
+	s.tmpl.Execute(w, data)
 }
 
 func main() {
@@ -192,6 +200,8 @@ func main() {
 
 	storage := NewMemStorage()
 	server := NewServer(storage)
+
+	server.InitTemplate()
 
 	r := chi.NewRouter()
 
