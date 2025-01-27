@@ -7,11 +7,19 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
 func TestUpdateHandler(t *testing.T) {
+	// Создаем логгер
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		t.Fatalf("failed to create logger: %v", err)
+	}
+	defer logger.Sync() // Ensure to flush any buffered log entries
+
 	storage := NewMemStorage()
-	server := NewServer(storage)
+	server := NewServer(storage, logger)
 
 	r := chi.NewRouter()
 	r.Post("/update/{type}/{name}/{value}", server.UpdateHandler)
@@ -81,8 +89,15 @@ func TestUpdateHandler(t *testing.T) {
 }
 
 func TestGaugeUpdate(t *testing.T) {
+	// Создаем логгер
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		t.Fatalf("failed to create logger: %v", err)
+	}
+	defer logger.Sync() // Ensure to flush any buffered log entries
+
 	storage := NewMemStorage()
-	server := NewServer(storage)
+	server := NewServer(storage, logger)
 
 	r := chi.NewRouter()
 	r.Post("/update/{type}/{name}/{value}", server.UpdateHandler)
@@ -106,8 +121,15 @@ func TestGaugeUpdate(t *testing.T) {
 }
 
 func TestCounterUpdate(t *testing.T) {
+	// Создаем логгер
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		t.Fatalf("failed to create logger: %v", err)
+	}
+	defer logger.Sync() // Ensure to flush any buffered log entries
+
 	storage := NewMemStorage()
-	server := NewServer(storage)
+	server := NewServer(storage, logger)
 
 	r := chi.NewRouter()
 	r.Post("/update/{type}/{name}/{value}", server.UpdateHandler)
@@ -144,8 +166,15 @@ func normalizeHTML(input string) string {
 }
 
 func TestRootHandler(t *testing.T) {
+	// Создаем логгер
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		t.Fatalf("failed to create logger: %v", err)
+	}
+	defer logger.Sync() // Ensure to flush any buffered log entries
+
 	storage := NewMemStorage()
-	server := NewServer(storage)
+	server := NewServer(storage, logger)
 
 	r := chi.NewRouter()
 	r.Get("/", server.RootHandler)
