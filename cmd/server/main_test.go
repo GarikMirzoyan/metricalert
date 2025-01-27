@@ -3,12 +3,18 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func TestUpdateHandler(t *testing.T) {
 	storage := NewMemStorage()
 	server := NewServer(storage)
+
+	r := chi.NewRouter()
+	r.Post("/update/{type}/{name}/{value}", server.UpdateHandler)
 
 	tests := []struct {
 		name           string
@@ -65,7 +71,7 @@ func TestUpdateHandler(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.url, nil)
 			rec := httptest.NewRecorder()
 
-			server.UpdateHandler(rec, req)
+			r.ServeHTTP(rec, req)
 
 			if rec.Code != tt.expectedStatus {
 				t.Errorf("expected status %d, got %d", tt.expectedStatus, rec.Code)
@@ -78,10 +84,13 @@ func TestGaugeUpdate(t *testing.T) {
 	storage := NewMemStorage()
 	server := NewServer(storage)
 
+	r := chi.NewRouter()
+	r.Post("/update/{type}/{name}/{value}", server.UpdateHandler)
+
 	req := httptest.NewRequest(http.MethodPost, "/update/gauge/TestMetric/123.45", nil)
 	rec := httptest.NewRecorder()
 
-	server.UpdateHandler(rec, req)
+	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
@@ -100,10 +109,13 @@ func TestCounterUpdate(t *testing.T) {
 	storage := NewMemStorage()
 	server := NewServer(storage)
 
+	r := chi.NewRouter()
+	r.Post("/update/{type}/{name}/{value}", server.UpdateHandler)
+
 	// First update
 	req1 := httptest.NewRequest(http.MethodPost, "/update/counter/TestMetric/10", nil)
 	rec1 := httptest.NewRecorder()
-	server.UpdateHandler(rec1, req1)
+	r.ServeHTTP(rec1, req1)
 
 	if rec1.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec1.Code)
@@ -112,7 +124,7 @@ func TestCounterUpdate(t *testing.T) {
 	// Second update
 	req2 := httptest.NewRequest(http.MethodPost, "/update/counter/TestMetric/15", nil)
 	rec2 := httptest.NewRecorder()
-	server.UpdateHandler(rec2, req2)
+	r.ServeHTTP(rec2, req2)
 
 	if rec2.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec2.Code)
@@ -125,4 +137,43 @@ func TestCounterUpdate(t *testing.T) {
 	if value.Value != 25 {
 		t.Errorf("expected counter value 25, got %d", value.Value)
 	}
+}
+
+func normalizeHTML(input string) string {
+	return strings.Join(strings.Fields(input), "")
+}
+
+func TestRootHandler(t *testing.T) {
+	storage := NewMemStorage()
+	server := NewServer(storage)
+
+	r := chi.NewRouter()
+	r.Get("/", server.RootHandler)
+
+	// Update some metrics
+	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/update/gauge/TestGauge/1.23", nil))
+	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/update/counter/TestCounter/5", nil))
+
+	// Now test root handler
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	expectedBody := "<!DOCTYPE html>"
+	actualBody := normalizeHTML(rec.Body.String())
+	normalizedExpectedBody := normalizeHTML(expectedBody)
+
+	if !strings.HasPrefix(actualBody, normalizedExpectedBody) {
+		t.Errorf("expected body to start with '%s', but got '%s'", normalizedExpectedBody, actualBody)
+	}
+}
+
+// Helper function to check if a string contains a substring
+func stringContains(str, substr string) bool {
+	return len(str) >= len(substr) && str[:len(substr)] == substr
 }
