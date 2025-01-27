@@ -9,8 +9,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
 type MetricType string
@@ -68,12 +70,52 @@ func (ms *MemStorage) GetCounter(name string) (CounterMetric, bool) {
 type Server struct {
 	storage *MemStorage
 	tmpl    *template.Template
+	logger  *zap.Logger // добавляем logger
 }
 
-func NewServer(storage *MemStorage) *Server {
-	server := &Server{storage: storage}
+func NewServer(storage *MemStorage, logger *zap.Logger) *Server {
+	server := &Server{storage: storage, logger: logger}
 	server.InitTemplate()
 	return server
+}
+
+// Middleware для логирования запросов и ответов
+func (s *Server) Logger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		// Подготовим кастомный ResponseWriter для получения информации о статусе и размере ответа
+		ww := &statusWriter{ResponseWriter: w}
+		next.ServeHTTP(ww, r)
+
+		duration := time.Since(start)
+
+		// Логируем информацию о запросе и ответе
+		s.logger.Info("Handled request",
+			zap.String("method", r.Method),
+			zap.String("uri", r.RequestURI),
+			zap.Duration("duration", duration),
+			zap.Int("status", ww.status),
+			zap.Int64("response_size", ww.size),
+		)
+	})
+}
+
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+	size   int64
+}
+
+func (ww *statusWriter) WriteHeader(status int) {
+	ww.status = status
+	ww.ResponseWriter.WriteHeader(status)
+}
+
+func (ww *statusWriter) Write(p []byte) (int, error) {
+	size, err := ww.ResponseWriter.Write(p)
+	ww.size += int64(size)
+	return size, err
 }
 
 func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
@@ -111,15 +153,9 @@ func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func formatNumber(num float64) string {
-	// Округляем число до 3 знаков после запятой
 	rounded := strconv.FormatFloat(num, 'f', 3, 64)
-
-	// Убираем лишние нули в конце
 	rounded = strings.TrimRight(rounded, "0")
-
-	// Убираем точку, если нет чисел после неё
 	rounded = strings.TrimRight(rounded, ".")
-
 	return rounded
 }
 
@@ -172,7 +208,6 @@ func (s *Server) InitTemplate() {
         </body>
         </html>
     `
-	// Парсим шаблон один раз
 	s.tmpl = template.Must(template.New("metrics").Parse(tmpl))
 }
 
@@ -197,10 +232,13 @@ func (s *Server) RootHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	// Настройка логирования с использованием zap
+	logger, _ := zap.NewProduction()
+	defer logger.Sync()
+
 	addressEnv := os.Getenv("ADDRESS")
 
 	defaultAddress := "localhost:8080"
-
 	address := flag.String("a", defaultAddress, "HTTP server address (without http:// or https://)")
 	flag.Parse()
 
@@ -209,16 +247,19 @@ func main() {
 	}
 
 	storage := NewMemStorage()
-	server := NewServer(storage)
+	server := NewServer(storage, logger)
 
 	r := chi.NewRouter()
+
+	// Добавляем middleware для логирования
+	r.Use(server.Logger)
 
 	r.Post("/update/{type}/{name}/{value}", server.UpdateHandler)
 	r.Get("/value/{type}/{name}", server.GetValueHandler)
 	r.Get("/", server.RootHandler)
 
-	fmt.Printf("Starting server at %s\n", *address)
+	logger.Info("Starting server", zap.String("address", *address))
 	if err := http.ListenAndServe(*address, r); err != nil {
-		fmt.Printf("Error starting server: %v\n", err)
+		logger.Error("Error starting server", zap.Error(err))
 	}
 }
