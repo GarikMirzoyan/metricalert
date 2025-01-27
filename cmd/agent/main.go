@@ -1,10 +1,12 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
 	"net/http"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -32,26 +34,8 @@ func (a *Agent) CollectMetrics() map[string]Gauge {
 	runtime.ReadMemStats(&memStats)
 
 	metrics := map[string]Gauge{
-		"Alloc":         Gauge(memStats.Alloc),
-		"BuckHashSys":   Gauge(memStats.BuckHashSys),
-		"Frees":         Gauge(memStats.Frees),
-		"GCCPUFraction": Gauge(memStats.GCCPUFraction),
-		"GCSys":         Gauge(memStats.GCSys),
-		"HeapAlloc":     Gauge(memStats.HeapAlloc),
-		"HeapIdle":      Gauge(memStats.HeapIdle),
-		"HeapInuse":     Gauge(memStats.HeapInuse),
-		"HeapObjects":   Gauge(memStats.HeapObjects),
-		"HeapReleased":  Gauge(memStats.HeapReleased),
-		"HeapSys":       Gauge(memStats.HeapSys),
-		"LastGC":        Gauge(memStats.LastGC),
-		"Mallocs":       Gauge(memStats.Mallocs),
-		"NextGC":        Gauge(memStats.NextGC),
-		"PauseTotalNs":  Gauge(memStats.PauseTotalNs),
-		"StackInuse":    Gauge(memStats.StackInuse),
-		"StackSys":      Gauge(memStats.StackSys),
-		"Sys":           Gauge(memStats.Sys),
-		"TotalAlloc":    Gauge(memStats.TotalAlloc),
-		"RandomValue":   Gauge(rand.Float64()),
+		"Alloc":       Gauge(memStats.Alloc),
+		"RandomValue": Gauge(rand.Float64()),
 	}
 
 	return metrics
@@ -97,6 +81,15 @@ func (a *Agent) Run() {
 }
 
 func main() {
-	agent := NewAgent("http://localhost:8080", 2*time.Second, 10*time.Second)
+	address := flag.String("a", "http://localhost:8080", "HTTP server address")
+	reportInterval := flag.Int("r", 10, "Report interval in seconds")
+	pollInterval := flag.Int("p", 2, "Poll interval in seconds")
+	flag.Parse()
+
+	if !strings.HasPrefix(*address, "http://") && !strings.HasPrefix(*address, "https://") {
+		*address = "http://" + *address
+	}
+
+	agent := NewAgent(*address, time.Duration(*pollInterval)*time.Second, time.Duration(*reportInterval)*time.Second)
 	agent.Run()
 }

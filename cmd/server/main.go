@@ -1,11 +1,13 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"html/template"
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -119,7 +121,7 @@ func (s *Server) GetValueHandler(w http.ResponseWriter, r *http.Request) {
 		if metric, exists := s.storage.GetGauge(metricName); exists {
 			roundedValue := round(metric.Value, 3)
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(fmt.Sprintf("%.3f", roundedValue)))
+			w.Write([]byte(strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.3f", roundedValue), "0"), ".")))
 		} else {
 			http.Error(w, "Metric not found", http.StatusNotFound)
 		}
@@ -176,6 +178,9 @@ func (s *Server) RootHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	address := flag.String("a", "localhost:8080", "HTTP server address")
+	flag.Parse()
+
 	storage := NewMemStorage()
 	server := NewServer(storage)
 
@@ -185,8 +190,8 @@ func main() {
 	r.Get("/value/{type}/{name}", server.GetValueHandler)
 	r.Get("/", server.RootHandler)
 
-	fmt.Println("Starting server at :8080")
-	if err := http.ListenAndServe(":8080", r); err != nil {
+	fmt.Printf("Starting server at %s\n", *address)
+	if err := http.ListenAndServe(*address, r); err != nil {
 		fmt.Printf("Error starting server: %v\n", err)
 	}
 }
