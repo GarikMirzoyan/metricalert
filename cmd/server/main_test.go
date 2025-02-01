@@ -22,6 +22,84 @@ func TestUpdateHandler(t *testing.T) {
 	server := NewServer(storage, logger)
 
 	r := chi.NewRouter()
+	r.Post("/update/{type}/{name}/{value}", server.UpdateHandler)
+
+	tests := []struct {
+		name           string
+		method         string
+		url            string
+		expectedStatus int
+	}{
+		{
+			name:           "Valid Gauge Metric",
+			method:         http.MethodPost,
+			url:            "/update/gauge/Alloc/123.45",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "Valid Counter Metric",
+			method:         http.MethodPost,
+			url:            "/update/counter/RequestCount/10",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "Invalid Method",
+			method:         http.MethodGet,
+			url:            "/update/gauge/Alloc/123.45",
+			expectedStatus: http.StatusMethodNotAllowed,
+		},
+		{
+			name:           "Missing Metric Name",
+			method:         http.MethodPost,
+			url:            "/update/gauge//123.45",
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name:           "Invalid Metric Type",
+			method:         http.MethodPost,
+			url:            "/update/unknown/Alloc/123.45",
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "Invalid Gauge Value",
+			method:         http.MethodPost,
+			url:            "/update/gauge/Alloc/invalid",
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "Invalid Counter Value",
+			method:         http.MethodPost,
+			url:            "/update/counter/RequestCount/invalid",
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.url, nil)
+			rec := httptest.NewRecorder()
+
+			r.ServeHTTP(rec, req)
+
+			if rec.Code != tt.expectedStatus {
+				t.Errorf("expected status %d, got %d", tt.expectedStatus, rec.Code)
+			}
+		})
+	}
+}
+
+func TestUpdateHandlerJson(t *testing.T) {
+	// Создаем логгер
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		t.Fatalf("failed to create logger: %v", err)
+	}
+	defer logger.Sync() // Ensure to flush any buffered log entries
+
+	storage := NewMemStorage()
+	server := NewServer(storage, logger)
+
+	r := chi.NewRouter()
 	r.Post("/update/", server.UpdateHandler)
 
 	tests := []struct {

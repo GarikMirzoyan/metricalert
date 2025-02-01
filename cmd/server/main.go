@@ -127,6 +127,40 @@ func (ww *statusWriter) Write(p []byte) (int, error) {
 }
 
 func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
+	metricType := chi.URLParam(r, "type")
+	metricName := chi.URLParam(r, "name")
+	metricValue := chi.URLParam(r, "value")
+
+	if metricName == "" {
+		http.Error(w, "Metric name not provided", http.StatusNotFound)
+		return
+	}
+
+	switch MetricType(metricType) {
+	case Gauge:
+		value, err := strconv.ParseFloat(metricValue, 64)
+		if err != nil {
+			http.Error(w, "Invalid metric value for gauge", http.StatusBadRequest)
+			return
+		}
+		s.storage.UpdateGauge(metricName, value)
+	case Counter:
+		value, err := strconv.ParseInt(metricValue, 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid metric value for counter", http.StatusBadRequest)
+			return
+		}
+		s.storage.UpdateCounter(metricName, value)
+	default:
+		http.Error(w, "Invalid metric type", http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+}
+
+func (s *Server) UpdateHandlerJson(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Content-Type") != "application/json" {
 		http.Error(w, "Invalid Content-Type", http.StatusBadRequest)
 		return
@@ -332,7 +366,8 @@ func main() {
 	// Добавляем middleware для логирования
 	r.Use(server.Logger)
 
-	r.Post("/update/", server.UpdateHandler)
+	r.Post("/update/{type}/{name}/{value}", server.UpdateHandler)
+	r.Post("/update/", server.UpdateHandlerJson)
 	r.Post("/value/", server.GetValueHandlerPost)
 	r.Get("/value/{type}/{name}", server.GetValueHandler)
 	r.Get("/", server.RootHandler)
