@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"html/template"
@@ -9,8 +10,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
 type MetricType string
@@ -19,6 +22,13 @@ const (
 	Gauge   MetricType = "gauge"
 	Counter MetricType = "counter"
 )
+
+type Metrics struct {
+	ID    string   `json:"id"`              // имя метрики
+	MType string   `json:"type"`            // параметр, принимающий значение gauge или counter
+	Delta *int64   `json:"delta,omitempty"` // значение метрики в случае передачи counter
+	Value *float64 `json:"value,omitempty"` // значение метрики в случае передачи gauge
+}
 
 type GaugeMetric struct {
 	Value float64
@@ -68,12 +78,52 @@ func (ms *MemStorage) GetCounter(name string) (CounterMetric, bool) {
 type Server struct {
 	storage *MemStorage
 	tmpl    *template.Template
+	logger  *zap.Logger // добавляем logger
 }
 
-func NewServer(storage *MemStorage) *Server {
-	server := &Server{storage: storage}
+func NewServer(storage *MemStorage, logger *zap.Logger) *Server {
+	server := &Server{storage: storage, logger: logger}
 	server.InitTemplate()
 	return server
+}
+
+// Middleware для логирования запросов и ответов
+func (s *Server) Logger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		// Подготовим кастомный ResponseWriter для получения информации о статусе и размере ответа
+		ww := &statusWriter{ResponseWriter: w}
+		next.ServeHTTP(ww, r)
+
+		duration := time.Since(start)
+
+		// Логируем информацию о запросе и ответе
+		s.logger.Info("Handled request",
+			zap.String("method", r.Method),
+			zap.String("uri", r.RequestURI),
+			zap.Duration("duration", duration),
+			zap.Int("status", ww.status),
+			zap.Int64("response_size", ww.size),
+		)
+	})
+}
+
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+	size   int64
+}
+
+func (ww *statusWriter) WriteHeader(status int) {
+	ww.status = status
+	ww.ResponseWriter.WriteHeader(status)
+}
+
+func (ww *statusWriter) Write(p []byte) (int, error) {
+	size, err := ww.ResponseWriter.Write(p)
+	ww.size += int64(size)
+	return size, err
 }
 
 func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
@@ -110,16 +160,63 @@ func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
+func (s *Server) UpdateHandlerJSON(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Content-Type") != "application/json" {
+		http.Error(w, "Invalid Content-Type", http.StatusBadRequest)
+		return
+	}
+
+	var request Metrics
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if request.ID == "" {
+		http.Error(w, "Metric ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Создаём структуру для ответа
+	response := Metrics{
+		ID:    request.ID,
+		MType: request.MType,
+	}
+
+	switch request.MType {
+	case "gauge":
+		// Обновляем значение метрики типа Gauge
+		if request.Value == nil {
+			http.Error(w, "Value is required for gauge", http.StatusBadRequest)
+			return
+		}
+		s.storage.UpdateGauge(request.ID, *request.Value)
+		response.Value = request.Value
+	case "counter":
+		// Обновляем значение метрики типа Counter
+		if request.Delta == nil {
+			http.Error(w, "Delta is required for counter", http.StatusBadRequest)
+			return
+		}
+		s.storage.UpdateCounter(request.ID, *request.Delta)
+		response.Delta = request.Delta
+	default:
+		http.Error(w, "Invalid metric type", http.StatusBadRequest)
+		return
+	}
+
+	// Отправляем ответ с актуальными значениями
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+	}
+}
+
 func formatNumber(num float64) string {
-	// Округляем число до 3 знаков после запятой
 	rounded := strconv.FormatFloat(num, 'f', 3, 64)
-
-	// Убираем лишние нули в конце
 	rounded = strings.TrimRight(rounded, "0")
-
-	// Убираем точку, если нет чисел после неё
 	rounded = strings.TrimRight(rounded, ".")
-
 	return rounded
 }
 
@@ -152,6 +249,57 @@ func (s *Server) GetValueHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) GetValueHandlerPost(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Content-Type") != "application/json" {
+		http.Error(w, "Invalid Content-Type", http.StatusBadRequest)
+		return
+	}
+
+	var request Metrics
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if request.MType == "" {
+		http.Error(w, "Metric name not provided", http.StatusNotFound)
+		return
+	}
+
+	// Создаём структуру для ответа
+	response := Metrics{
+		ID:    request.ID,
+		MType: request.MType,
+	}
+
+	// Проверка на существование метрики
+	switch MetricType(request.MType) {
+	case Gauge:
+		if metric, exists := s.storage.GetGauge(request.ID); exists {
+			response.Value = &metric.Value
+		} else {
+			http.Error(w, "Metric not found", http.StatusNotFound)
+			return
+		}
+	case Counter:
+		if metric, exists := s.storage.GetCounter(request.ID); exists {
+			response.Delta = &metric.Value
+		} else {
+			http.Error(w, "Metric not found", http.StatusNotFound)
+			return
+		}
+	default:
+		http.Error(w, "Invalid metric type", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+	}
+}
+
 func (s *Server) InitTemplate() {
 	tmpl := `
         <!DOCTYPE html>
@@ -172,7 +320,6 @@ func (s *Server) InitTemplate() {
         </body>
         </html>
     `
-	// Парсим шаблон один раз
 	s.tmpl = template.Must(template.New("metrics").Parse(tmpl))
 }
 
@@ -197,10 +344,13 @@ func (s *Server) RootHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	// Настройка логирования с использованием zap
+	logger, _ := zap.NewProduction()
+	defer logger.Sync()
+
 	addressEnv := os.Getenv("ADDRESS")
 
 	defaultAddress := "localhost:8080"
-
 	address := flag.String("a", defaultAddress, "HTTP server address (without http:// or https://)")
 	flag.Parse()
 
@@ -209,16 +359,21 @@ func main() {
 	}
 
 	storage := NewMemStorage()
-	server := NewServer(storage)
+	server := NewServer(storage, logger)
 
 	r := chi.NewRouter()
 
+	// Добавляем middleware для логирования
+	r.Use(server.Logger)
+
 	r.Post("/update/{type}/{name}/{value}", server.UpdateHandler)
+	r.Post("/update/", server.UpdateHandlerJSON)
+	r.Post("/value/", server.GetValueHandlerPost)
 	r.Get("/value/{type}/{name}", server.GetValueHandler)
 	r.Get("/", server.RootHandler)
 
-	fmt.Printf("Starting server at %s\n", *address)
+	logger.Info("Starting server", zap.String("address", *address))
 	if err := http.ListenAndServe(*address, r); err != nil {
-		fmt.Printf("Error starting server: %v\n", err)
+		logger.Error("Error starting server", zap.Error(err))
 	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -30,19 +31,43 @@ func TestSendMetric(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST method, got %s", r.Method)
 		}
-		if r.URL.Path != "/update/gauge/TestMetric/123.45" {
-			t.Errorf("unexpected URL path: %s", r.URL.Path)
+
+		var metric Metrics
+		if err := json.NewDecoder(r.Body).Decode(&metric); err != nil {
+			t.Errorf("failed to decode request body: %v", err)
 		}
-		if r.Header.Get("Content-Type") != "text/plain" {
-			t.Errorf("expected Content-Type 'text/plain', got '%s'", r.Header.Get("Content-Type"))
+
+		// Проверяем данные метрики
+		if metric.ID != "TestMetric" {
+			t.Errorf("expected metric ID 'TestMetric', got %s", metric.ID)
 		}
+		if metric.MType != "gauge" {
+			t.Errorf("expected metric type 'gauge', got %s", metric.MType)
+		}
+		if *metric.Value != 123.45 {
+			t.Errorf("expected metric value 123.45, got %f", *metric.Value)
+		}
+
+		// Проверяем Content-Type
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("expected Content-Type 'application/json', got '%s'", r.Header.Get("Content-Type"))
+		}
+
+		// Ответ на успешную обработку
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
 	agent := NewAgent(server.URL, 2*time.Second, 10*time.Second)
 
-	agent.SendMetric("gauge", "TestMetric", 123.45)
+	value := 123.45
+	metric := Metrics{
+		ID:    "TestMetric",
+		MType: "gauge",
+		Value: &value,
+	}
+
+	agent.SendMetric(metric)
 }
 
 func TestAgentRun(t *testing.T) {
