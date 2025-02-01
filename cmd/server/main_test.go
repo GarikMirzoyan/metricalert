@@ -88,7 +88,7 @@ func TestUpdateHandler(t *testing.T) {
 	}
 }
 
-func TestUpdateHandlerJson(t *testing.T) {
+func TestUpdateHandlerJSON(t *testing.T) {
 	// Создаем логгер
 	logger, err := zap.NewDevelopment()
 	if err != nil {
@@ -100,7 +100,7 @@ func TestUpdateHandlerJson(t *testing.T) {
 	server := NewServer(storage, logger)
 
 	r := chi.NewRouter()
-	r.Post("/update/", server.UpdateHandler)
+	r.Post("/update/", server.UpdateHandlerJSON)
 
 	tests := []struct {
 		name           string
@@ -179,7 +179,7 @@ func TestGaugeUpdate(t *testing.T) {
 	server := NewServer(storage, logger)
 
 	r := chi.NewRouter()
-	r.Post("/update/", server.UpdateHandler)
+	r.Post("/update/", server.UpdateHandlerJSON)
 
 	req := httptest.NewRequest(http.MethodPost, "/update/", strings.NewReader(`{"id":"TestMetric","type":"gauge","value":123.45}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -212,7 +212,7 @@ func TestCounterUpdate(t *testing.T) {
 	server := NewServer(storage, logger)
 
 	r := chi.NewRouter()
-	r.Post("/update/", server.UpdateHandler)
+	r.Post("/update/", server.UpdateHandlerJSON)
 
 	// First update
 	req1 := httptest.NewRequest(http.MethodPost, "/update/", strings.NewReader(`{"id":"TestMetric","type":"counter","delta":10}`))

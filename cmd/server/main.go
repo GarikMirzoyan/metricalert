@@ -160,7 +160,7 @@ func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
-func (s *Server) UpdateHandlerJson(w http.ResponseWriter, r *http.Request) {
+func (s *Server) UpdateHandlerJSON(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Content-Type") != "application/json" {
 		http.Error(w, "Invalid Content-Type", http.StatusBadRequest)
 		return
@@ -367,7 +367,7 @@ func main() {
 	r.Use(server.Logger)
 
 	r.Post("/update/{type}/{name}/{value}", server.UpdateHandler)
-	r.Post("/update/", server.UpdateHandlerJson)
+	r.Post("/update/", server.UpdateHandlerJSON)
 	r.Post("/value/", server.GetValueHandlerPost)
 	r.Get("/value/{type}/{name}", server.GetValueHandler)
 	r.Get("/", server.RootHandler)
