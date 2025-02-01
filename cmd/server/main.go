@@ -138,6 +138,11 @@ func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if request.ID == "" {
+		http.Error(w, "Metric ID is required", http.StatusBadRequest)
+		return
+	}
+
 	// Создаём структуру для ответа
 	response := Metrics{
 		ID:    request.ID,
@@ -222,32 +227,36 @@ func (s *Server) GetValueHandlerPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if request.MType == "" {
+		http.Error(w, "Metric name not provided", http.StatusNotFound)
+		return
+	}
+
 	// Создаём структуру для ответа
 	response := Metrics{
 		ID:    request.ID,
 		MType: request.MType,
 	}
 
-	if response.MType == "" {
-		http.Error(w, "Metric name not provided", http.StatusNotFound)
-		return
-	}
-
-	switch MetricType(response.MType) {
+	// Проверка на существование метрики
+	switch MetricType(request.MType) {
 	case Gauge:
-		if metric, exists := s.storage.GetGauge(response.ID); exists {
+		if metric, exists := s.storage.GetGauge(request.ID); exists {
 			response.Value = &metric.Value
 		} else {
 			http.Error(w, "Metric not found", http.StatusNotFound)
+			return
 		}
 	case Counter:
-		if metric, exists := s.storage.GetCounter(response.ID); exists {
+		if metric, exists := s.storage.GetCounter(request.ID); exists {
 			response.Delta = &metric.Value
 		} else {
 			http.Error(w, "Metric not found", http.StatusNotFound)
+			return
 		}
 	default:
 		http.Error(w, "Invalid metric type", http.StatusBadRequest)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
