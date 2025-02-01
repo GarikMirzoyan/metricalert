@@ -78,13 +78,28 @@ func (ms *MemStorage) GetCounter(name string) (CounterMetric, bool) {
 }
 
 type Server struct {
-	storage *MemStorage
-	tmpl    *template.Template
-	logger  *zap.Logger // добавляем logger
+	storage         *MemStorage
+	tmpl            *template.Template
+	logger          *zap.Logger
+	storeInterval   time.Duration
+	fileStoragePath string
+	restore         bool
 }
 
-func NewServer(storage *MemStorage, logger *zap.Logger) *Server {
-	server := &Server{storage: storage, logger: logger}
+type Config struct {
+	StoreInterval   time.Duration
+	FileStoragePath string
+	Restore         bool
+}
+
+func NewServer(storage *MemStorage, logger *zap.Logger, config Config) *Server {
+	server := &Server{
+		storage:         storage,
+		logger:          logger,
+		storeInterval:   config.StoreInterval,
+		fileStoragePath: config.FileStoragePath,
+		restore:         config.Restore,
+	}
 	server.InitTemplate()
 	return server
 }
@@ -392,6 +407,127 @@ func (gzw *gzipResponseWriter) Write(p []byte) (int, error) {
 	return gzw.Writer.Write(p)
 }
 
+// Загрузка метрик из файла
+func (s *Server) loadMetrics() error {
+	if !s.restore {
+		return nil
+	}
+
+	file, err := os.Open(s.fileStoragePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	for {
+		var metric Metrics
+		if err := decoder.Decode(&metric); err != nil {
+			if err.Error() == "EOF" {
+				break
+			}
+			return err
+		}
+
+		switch MetricType(metric.MType) {
+		case Gauge:
+			if metric.Value != nil {
+				s.storage.UpdateGauge(metric.ID, *metric.Value)
+			}
+		case Counter:
+			if metric.Delta != nil {
+				s.storage.UpdateCounter(metric.ID, *metric.Delta)
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Server) saveMetrics() error {
+	s.storage.mu.Lock()
+	defer s.storage.mu.Unlock()
+
+	file, err := os.Create(s.fileStoragePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	for name, gauge := range s.storage.gauges {
+		metric := Metrics{
+			ID:    name,
+			MType: string(Gauge),
+			Value: &gauge.Value,
+		}
+		if err := encoder.Encode(metric); err != nil {
+			return err
+		}
+	}
+
+	for name, counter := range s.storage.counters {
+		metric := Metrics{
+			ID:    name,
+			MType: string(Counter),
+			Delta: &counter.Value,
+		}
+		if err := encoder.Encode(metric); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Функция для периодического сохранения метрик
+func (s *Server) startMetricSaving() {
+	if s.storeInterval == 0 {
+		// Сохраняем синхронно
+		if err := s.saveMetrics(); err != nil {
+			s.logger.Error("Error saving metrics", zap.Error(err))
+		}
+	} else {
+		ticker := time.NewTicker(s.storeInterval)
+		for range ticker.C {
+			if err := s.saveMetrics(); err != nil {
+				s.logger.Error("Error saving metrics", zap.Error(err))
+			}
+		}
+	}
+}
+
+func initConfig() Config {
+	defaultStoreInterval := 30 * time.Second
+	defaultFileStoragePath := "metrics.json"
+	defaultRestore := true
+
+	storeInterval := flag.Int("i", int(defaultStoreInterval.Seconds()), "Interval for saving metrics (in seconds)")
+	fileStoragePath := flag.String("f", defaultFileStoragePath, "Path to file where metrics will be saved")
+	restore := flag.Bool("r", defaultRestore, "Restore metrics from file on start (true/false)")
+	flag.Parse()
+
+	// Чтение из переменных окружения
+	if envStoreInterval := os.Getenv("STORE_INTERVAL"); envStoreInterval != "" {
+		if si, err := time.ParseDuration(envStoreInterval + "s"); err == nil {
+			*storeInterval = int(si.Seconds())
+		}
+	}
+
+	if envFileStoragePath := os.Getenv("FILE_STORAGE_PATH"); envFileStoragePath != "" {
+		*fileStoragePath = envFileStoragePath
+	}
+
+	if envRestore := os.Getenv("RESTORE"); envRestore != "" {
+		*restore = envRestore == "true"
+	}
+
+	return Config{
+		StoreInterval:   time.Duration(*storeInterval) * time.Second,
+		FileStoragePath: *fileStoragePath,
+		Restore:         *restore,
+	}
+}
+
 func main() {
 	// Настройка логирования с использованием zap
 	logger, _ := zap.NewProduction()
@@ -407,10 +543,20 @@ func main() {
 		*address = addressEnv
 	}
 
+	config := initConfig()
+
 	storage := NewMemStorage()
-	server := NewServer(storage, logger)
+	server := NewServer(storage, logger, config)
 
 	r := chi.NewRouter()
+
+	// Загружаем метрики, если указано
+	if err := server.loadMetrics(); err != nil {
+		logger.Error("Error loading metrics", zap.Error(err))
+	}
+
+	// Запускаем сохранение метрик
+	go server.startMetricSaving()
 
 	// Добавляем middleware для логирования и сжатия
 	r.Use(server.Logger)
@@ -426,5 +572,9 @@ func main() {
 	logger.Info("Starting server", zap.String("address", *address))
 	if err := http.ListenAndServe(*address, r); err != nil {
 		logger.Error("Error starting server", zap.Error(err))
+	}
+
+	if err := server.saveMetrics(); err != nil {
+		logger.Error("Error saving metrics on shutdown", zap.Error(err))
 	}
 }
