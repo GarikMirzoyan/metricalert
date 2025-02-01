@@ -111,6 +111,14 @@ func (a *Agent) CollectMetrics() map[string]Gauge {
 		"Sys":           Gauge(memStats.Sys),
 		"TotalAlloc":    Gauge(memStats.TotalAlloc),
 		"RandomValue":   Gauge(rand.Float64()),
+		"Lookups":       Gauge(memStats.Lookups),
+		"MCacheInuse":   Gauge(memStats.MCacheInuse),
+		"MCacheSys":     Gauge(memStats.MCacheSys),
+		"MSpanInuse":    Gauge(memStats.MSpanInuse),
+		"MSpanSys":      Gauge(memStats.MSpanSys),
+		"NumForcedGC":   Gauge(memStats.NumForcedGC),
+		"NumGC":         Gauge(memStats.NumGC),
+		"OtherSys":      Gauge(memStats.OtherSys),
 	}
 
 	return metrics
