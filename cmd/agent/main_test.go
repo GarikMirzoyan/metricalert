@@ -1,7 +1,9 @@
 package main
 
 import (
+	"compress/gzip"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -32,8 +34,27 @@ func TestSendMetric(t *testing.T) {
 			t.Errorf("expected POST method, got %s", r.Method)
 		}
 
+		// Проверяем заголовки для gzip
+		if r.Header.Get("Content-Encoding") != "gzip" {
+			t.Errorf("expected Content-Encoding 'gzip', got '%s'", r.Header.Get("Content-Encoding"))
+		}
+
+		// Декодируем тело сжатое gzip
+		gzipReader, err := gzip.NewReader(r.Body)
+		if err != nil {
+			t.Errorf("failed to create gzip reader: %v", err)
+		}
+		defer gzipReader.Close()
+
+		// Читаем данные из gzip
+		body, err := io.ReadAll(gzipReader)
+		if err != nil {
+			t.Errorf("failed to read gzip body: %v", err)
+		}
+
+		// Декодируем JSON
 		var metric Metrics
-		if err := json.NewDecoder(r.Body).Decode(&metric); err != nil {
+		if err := json.Unmarshal(body, &metric); err != nil {
 			t.Errorf("failed to decode request body: %v", err)
 		}
 

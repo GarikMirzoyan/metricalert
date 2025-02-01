@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -124,24 +125,44 @@ func (a *Agent) CollectMetrics() map[string]Gauge {
 	return metrics
 }
 
+// Функция для сжатия данных в формате gzip
+func compressGzip(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	gzipWriter := gzip.NewWriter(&buf)
+	_, err := gzipWriter.Write(data)
+	if err != nil {
+		return nil, err
+	}
+	gzipWriter.Close()
+	return buf.Bytes(), nil
+}
+
+// Измененная функция отправки метрик с поддержкой gzip
 func (a *Agent) SendMetric(metric Metrics) {
 	url := fmt.Sprintf("%s/update/", a.serverAddress)
 
 	body, err := json.Marshal(metric)
-
 	if err != nil {
 		fmt.Printf("Error marshalling JSON: %v\n", err)
 		return
 	}
 
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
+	// Сжимаем данные перед отправкой
+	compressedBody, err := compressGzip(body)
+	if err != nil {
+		fmt.Printf("Error compressing data: %v\n", err)
+		return
+	}
 
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(compressedBody))
 	if err != nil {
 		fmt.Printf("Error creating request: %v\n", err)
 		return
 	}
 
+	// Устанавливаем заголовки для gzip
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
