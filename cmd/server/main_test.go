@@ -19,7 +19,8 @@ func TestUpdateHandler(t *testing.T) {
 	defer logger.Sync() // Ensure to flush any buffered log entries
 
 	storage := NewMemStorage()
-	server := NewServer(storage, logger)
+	config := Config{StoreInterval: 0, FileStoragePath: "", Restore: false}
+	server := NewServer(storage, logger, config)
 
 	r := chi.NewRouter()
 	r.Post("/update/{type}/{name}/{value}", server.UpdateHandler)
@@ -97,7 +98,8 @@ func TestUpdateHandlerJSON(t *testing.T) {
 	defer logger.Sync() // Ensure to flush any buffered log entries
 
 	storage := NewMemStorage()
-	server := NewServer(storage, logger)
+	config := Config{StoreInterval: 0, FileStoragePath: "", Restore: false}
+	server := NewServer(storage, logger, config)
 
 	r := chi.NewRouter()
 	r.Post("/update/", server.UpdateHandlerJSON)
@@ -176,7 +178,8 @@ func TestGaugeUpdate(t *testing.T) {
 	defer logger.Sync() // Ensure to flush any buffered log entries
 
 	storage := NewMemStorage()
-	server := NewServer(storage, logger)
+	config := Config{StoreInterval: 0, FileStoragePath: "", Restore: false}
+	server := NewServer(storage, logger, config)
 
 	r := chi.NewRouter()
 	r.Post("/update/", server.UpdateHandlerJSON)
@@ -209,7 +212,8 @@ func TestCounterUpdate(t *testing.T) {
 	defer logger.Sync() // Ensure to flush any buffered log entries
 
 	storage := NewMemStorage()
-	server := NewServer(storage, logger)
+	config := Config{StoreInterval: 0, FileStoragePath: "", Restore: false}
+	server := NewServer(storage, logger, config)
 
 	r := chi.NewRouter()
 	r.Post("/update/", server.UpdateHandlerJSON)
@@ -256,7 +260,8 @@ func TestRootHandler(t *testing.T) {
 	defer logger.Sync() // Ensure to flush any buffered log entries
 
 	storage := NewMemStorage()
-	server := NewServer(storage, logger)
+	config := Config{StoreInterval: 0, FileStoragePath: "", Restore: false}
+	server := NewServer(storage, logger, config)
 
 	r := chi.NewRouter()
 	r.Get("/", server.RootHandler)
@@ -292,7 +297,8 @@ func TestGetValueHandlerPost(t *testing.T) {
 	defer logger.Sync()
 
 	storage := NewMemStorage()
-	server := NewServer(storage, logger)
+	config := Config{StoreInterval: 0, FileStoragePath: "", Restore: false}
+	server := NewServer(storage, logger, config)
 
 	r := chi.NewRouter()
 	r.Post("/getvalue/", server.GetValueHandlerPost)
