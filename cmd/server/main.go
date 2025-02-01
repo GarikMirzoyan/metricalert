@@ -342,6 +342,8 @@ func (s *Server) RootHandler(w http.ResponseWriter, r *http.Request) {
 		data.Counters[name] = metric.Value
 	}
 
+	w.Header().Set("Content-Type", "text/html")
+
 	s.tmpl.Execute(w, data)
 }
 
