@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"html/template"
@@ -21,6 +22,13 @@ const (
 	Gauge   MetricType = "gauge"
 	Counter MetricType = "counter"
 )
+
+type Metrics struct {
+	ID    string   `json:"id"`              // имя метрики
+	MType string   `json:"type"`            // параметр, принимающий значение gauge или counter
+	Delta *int64   `json:"delta,omitempty"` // значение метрики в случае передачи counter
+	Value *float64 `json:"value,omitempty"` // значение метрики в случае передачи gauge
+}
 
 type GaugeMetric struct {
 	Value float64
@@ -119,37 +127,51 @@ func (ww *statusWriter) Write(p []byte) (int, error) {
 }
 
 func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
-	metricType := chi.URLParam(r, "type")
-	metricName := chi.URLParam(r, "name")
-	metricValue := chi.URLParam(r, "value")
-
-	if metricName == "" {
-		http.Error(w, "Metric name not provided", http.StatusNotFound)
+	if r.Header.Get("Content-Type") != "application/json" {
+		http.Error(w, "Invalid Content-Type", http.StatusBadRequest)
 		return
 	}
 
-	switch MetricType(metricType) {
-	case Gauge:
-		value, err := strconv.ParseFloat(metricValue, 64)
-		if err != nil {
-			http.Error(w, "Invalid metric value for gauge", http.StatusBadRequest)
+	var request Metrics
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Создаём структуру для ответа
+	response := Metrics{
+		ID:    request.ID,
+		MType: request.MType,
+	}
+
+	switch request.MType {
+	case "gauge":
+		// Обновляем значение метрики типа Gauge
+		if request.Value == nil {
+			http.Error(w, "Value is required for gauge", http.StatusBadRequest)
 			return
 		}
-		s.storage.UpdateGauge(metricName, value)
-	case Counter:
-		value, err := strconv.ParseInt(metricValue, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid metric value for counter", http.StatusBadRequest)
+		s.storage.UpdateGauge(request.ID, *request.Value)
+		response.Value = request.Value
+	case "counter":
+		// Обновляем значение метрики типа Counter
+		if request.Delta == nil {
+			http.Error(w, "Delta is required for counter", http.StatusBadRequest)
 			return
 		}
-		s.storage.UpdateCounter(metricName, value)
+		s.storage.UpdateCounter(request.ID, *request.Delta)
+		response.Delta = request.Delta
 	default:
 		http.Error(w, "Invalid metric type", http.StatusBadRequest)
 		return
 	}
 
+	// Отправляем ответ с актуальными значениями
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+	}
 }
 
 func formatNumber(num float64) string {
@@ -185,6 +207,53 @@ func (s *Server) GetValueHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	default:
 		http.Error(w, "Invalid metric type", http.StatusBadRequest)
+	}
+}
+
+func (s *Server) GetValueHandlerPost(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Content-Type") != "application/json" {
+		http.Error(w, "Invalid Content-Type", http.StatusBadRequest)
+		return
+	}
+
+	var request Metrics
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Создаём структуру для ответа
+	response := Metrics{
+		ID:    request.ID,
+		MType: request.MType,
+	}
+
+	if response.MType == "" {
+		http.Error(w, "Metric name not provided", http.StatusNotFound)
+		return
+	}
+
+	switch MetricType(response.MType) {
+	case Gauge:
+		if metric, exists := s.storage.GetGauge(response.ID); exists {
+			response.Value = &metric.Value
+		} else {
+			http.Error(w, "Metric not found", http.StatusNotFound)
+		}
+	case Counter:
+		if metric, exists := s.storage.GetCounter(response.ID); exists {
+			response.Delta = &metric.Value
+		} else {
+			http.Error(w, "Metric not found", http.StatusNotFound)
+		}
+	default:
+		http.Error(w, "Invalid metric type", http.StatusBadRequest)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Error encoding response", http.StatusInternalServerError)
 	}
 }
 
@@ -254,7 +323,8 @@ func main() {
 	// Добавляем middleware для логирования
 	r.Use(server.Logger)
 
-	r.Post("/update/{type}/{name}/{value}", server.UpdateHandler)
+	r.Post("/update/", server.UpdateHandler)
+	r.Post("/value/", server.GetValueHandlerPost)
 	r.Get("/value/{type}/{name}", server.GetValueHandler)
 	r.Get("/", server.RootHandler)
 
