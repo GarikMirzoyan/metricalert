@@ -1,0 +1,352 @@
+package metrics
+
+import (
+	"encoding/json"
+	"errors"
+	"math/rand/v2"
+	"net/http"
+	"os"
+	"runtime"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/GarikMirzoyan/metricalert/internal/server/config"
+	"go.uber.org/zap"
+)
+
+type MetricType string
+
+type Gauge float64
+type Counter int64
+
+const (
+	GaugeName   MetricType = "gauge"
+	CounterName MetricType = "counter"
+)
+
+type GaugeMetric struct {
+	Value float64
+}
+
+type CounterMetric struct {
+	Value int64
+}
+
+type MemStorage struct {
+	gauges   map[string]GaugeMetric
+	counters map[string]CounterMetric
+	mu       sync.Mutex
+}
+
+type Metrics struct {
+	ID    string   `json:"id"`              // имя метрики
+	MType string   `json:"type"`            // параметр, принимающий значение gauge или counter
+	Delta *int64   `json:"delta,omitempty"` // значение метрики в случае передачи counter
+	Value *float64 `json:"value,omitempty"` // значение метрики в случае передачи gauge
+}
+
+var (
+	ErrMetricNotFound     = errors.New("metric not found")
+	ErrInvalidMetricType  = errors.New("invalid metric type")
+	ErrInvalidMetricValue = errors.New("invalid metric value")
+	ErrInvalidMetricDelta = errors.New("invalid metric delta")
+	ErrInvalidJson        = errors.New("invalid JSON")
+	ErrInvalidMetricId    = errors.New("metric ID is required")
+)
+
+func NewMemStorage() *MemStorage {
+	return &MemStorage{
+		gauges:   make(map[string]GaugeMetric),
+		counters: make(map[string]CounterMetric),
+	}
+}
+
+func (ms *MemStorage) UpdateGauge(name string, value float64) {
+	ms.gauges[name] = GaugeMetric{Value: value}
+}
+
+func (ms *MemStorage) UpdateCounter(name string, value int64) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	if existing, exists := ms.counters[name]; exists {
+		value += existing.Value
+	}
+	ms.counters[name] = CounterMetric{Value: value}
+}
+
+func (ms *MemStorage) GetGauge(name string) (GaugeMetric, bool) {
+	metric, exists := ms.gauges[name]
+	return metric, exists
+}
+
+func (ms *MemStorage) GetCounter(name string) (CounterMetric, bool) {
+	metric, exists := ms.counters[name]
+	return metric, exists
+}
+
+// Получаем метрики из структуры, хранящ статистику по памяти Go-приложения
+func CollectMetrics() map[string]Gauge {
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+
+	metrics := map[string]Gauge{
+		"Alloc":         Gauge(memStats.Alloc),
+		"BuckHashSys":   Gauge(memStats.BuckHashSys),
+		"Frees":         Gauge(memStats.Frees),
+		"GCCPUFraction": Gauge(memStats.GCCPUFraction),
+		"GCSys":         Gauge(memStats.GCSys),
+		"HeapAlloc":     Gauge(memStats.HeapAlloc),
+		"HeapIdle":      Gauge(memStats.HeapIdle),
+		"HeapInuse":     Gauge(memStats.HeapInuse),
+		"HeapObjects":   Gauge(memStats.HeapObjects),
+		"HeapReleased":  Gauge(memStats.HeapReleased),
+		"HeapSys":       Gauge(memStats.HeapSys),
+		"LastGC":        Gauge(memStats.LastGC),
+		"Mallocs":       Gauge(memStats.Mallocs),
+		"NextGC":        Gauge(memStats.NextGC),
+		"PauseTotalNs":  Gauge(memStats.PauseTotalNs),
+		"StackInuse":    Gauge(memStats.StackInuse),
+		"StackSys":      Gauge(memStats.StackSys),
+		"Sys":           Gauge(memStats.Sys),
+		"TotalAlloc":    Gauge(memStats.TotalAlloc),
+		"RandomValue":   Gauge(rand.Float64()),
+		"Lookups":       Gauge(memStats.Lookups),
+		"MCacheInuse":   Gauge(memStats.MCacheInuse),
+		"MCacheSys":     Gauge(memStats.MCacheSys),
+		"MSpanInuse":    Gauge(memStats.MSpanInuse),
+		"MSpanSys":      Gauge(memStats.MSpanSys),
+		"NumForcedGC":   Gauge(memStats.NumForcedGC),
+		"NumGC":         Gauge(memStats.NumGC),
+		"OtherSys":      Gauge(memStats.OtherSys),
+	}
+
+	return metrics
+}
+
+// Загрузка метрик из файла
+func (ms *MemStorage) LoadMetricsFromFile(config config.Config) error {
+	if !config.Restore {
+		return nil
+	}
+
+	file, err := os.Open(config.FileStoragePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	for {
+		var metric Metrics
+		if err := decoder.Decode(&metric); err != nil {
+			if err.Error() == "EOF" {
+				break
+			}
+			return err
+		}
+
+		switch MetricType(metric.MType) {
+		case GaugeName:
+			if metric.Value != nil {
+				ms.UpdateGauge(metric.ID, *metric.Value)
+			}
+		case CounterName:
+			if metric.Delta != nil {
+				ms.UpdateCounter(metric.ID, *metric.Delta)
+			}
+		}
+	}
+	return nil
+}
+
+func (ms *MemStorage) SaveMetricsToFile(config config.Config) error {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	file, err := os.Create(config.FileStoragePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	for name, gauge := range ms.gauges {
+		metric := Metrics{
+			ID:    name,
+			MType: string(GaugeName),
+			Value: &gauge.Value,
+		}
+		if err := encoder.Encode(metric); err != nil {
+			return err
+		}
+	}
+
+	for name, counter := range ms.counters {
+		metric := Metrics{
+			ID:    name,
+			MType: string(CounterName),
+			Delta: &counter.Value,
+		}
+		if err := encoder.Encode(metric); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Функция для периодического сохранения метрик
+func (ms *MemStorage) StartMetricSaving(config config.Config, logger *zap.Logger) {
+	if config.StoreInterval == 0 {
+		// Сохраняем синхронно
+		if err := ms.SaveMetricsToFile(config); err != nil {
+			logger.Error("Error saving metrics", zap.Error(err))
+		}
+	} else {
+		ticker := time.NewTicker(config.StoreInterval)
+		for range ticker.C {
+			if err := ms.SaveMetricsToFile(config); err != nil {
+				logger.Error("Error saving metrics", zap.Error(err))
+			}
+		}
+	}
+}
+
+func (ms *MemStorage) UpdateMetrics(metricType, metricValue, metricName string) error {
+	switch MetricType(metricType) {
+	case GaugeName:
+		value, err := strconv.ParseFloat(metricValue, 64)
+		if err != nil {
+			return ErrInvalidMetricValue
+		}
+		ms.UpdateGauge(metricName, value)
+	case CounterName:
+		value, err := strconv.ParseInt(metricValue, 10, 64)
+		if err != nil {
+			return ErrInvalidMetricValue
+		}
+		ms.UpdateCounter(metricName, value)
+	default:
+		return ErrInvalidMetricType
+	}
+	return nil
+}
+
+func (ms *MemStorage) UpdateMetricsFromJson(r *http.Request) (Metrics, error) {
+
+	var request Metrics
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return Metrics{}, ErrInvalidJson
+	}
+
+	if request.ID == "" {
+		return Metrics{}, ErrInvalidMetricId
+	}
+
+	// Создаём структуру для ответа
+	response := Metrics{
+		ID:    request.ID,
+		MType: request.MType,
+	}
+
+	switch MetricType(request.MType) {
+	case GaugeName:
+		// Обновляем значение метрики типа Gauge
+		if request.Value == nil {
+			return Metrics{}, ErrInvalidMetricDelta
+		}
+		ms.UpdateGauge(request.ID, *request.Value)
+		response.Value = request.Value
+	case CounterName:
+		// Обновляем значение метрики типа Counter
+		if request.Delta == nil {
+			return Metrics{}, ErrInvalidMetricDelta
+		}
+		ms.UpdateCounter(request.ID, *request.Delta)
+		response.Delta = request.Delta
+	default:
+		return Metrics{}, ErrInvalidMetricType
+	}
+
+	return response, nil
+}
+
+func (ms *MemStorage) GetMetricsFromJson(r *http.Request) (Metrics, error) {
+
+	var request Metrics
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return Metrics{}, ErrInvalidJson
+	}
+	if request.MType == "" {
+		return Metrics{}, ErrInvalidMetricType
+	}
+
+	// Создаём структуру для ответа
+	response := Metrics{
+		ID:    request.ID,
+		MType: request.MType,
+	}
+
+	// Проверка на существование метрики
+	switch MetricType(request.MType) {
+	case GaugeName:
+		if metric, exists := ms.GetGauge(request.ID); exists {
+			response.Value = &metric.Value
+		} else {
+			return Metrics{}, ErrMetricNotFound
+		}
+	case CounterName:
+		if metric, exists := ms.GetCounter(request.ID); exists {
+			response.Delta = &metric.Value
+		} else {
+			return Metrics{}, ErrMetricNotFound
+		}
+	default:
+		return Metrics{}, ErrInvalidMetricType
+	}
+
+	return response, nil
+}
+
+// GetMetricValue получает значение метрики и возвращает его как строку
+func (ms *MemStorage) GetMetricValue(metricType, metricName string) (string, error) {
+	switch MetricType(metricType) {
+	case GaugeName:
+		if metric, exists := ms.GetGauge(metricName); exists {
+			return formatNumber(metric.Value), nil
+		}
+	case CounterName:
+		if metric, exists := ms.GetCounter(metricName); exists {
+			return strconv.Itoa(int(metric.Value)), nil
+		}
+	default:
+		return "", ErrInvalidMetricType
+	}
+	return "", ErrMetricNotFound
+}
+
+func formatNumber(num float64) string {
+	rounded := strconv.FormatFloat(num, 'f', 3, 64)
+	rounded = strings.TrimRight(rounded, "0")
+	rounded = strings.TrimRight(rounded, ".")
+	return rounded
+}
+
+func (ms *MemStorage) GetAllMetrics() (map[string]float64, map[string]int64) {
+	gauges := make(map[string]float64)
+	counters := make(map[string]int64)
+
+	// Копируем данные из хранилища
+	for name, metric := range ms.gauges {
+		gauges[name] = metric.Value
+	}
+
+	for name, metric := range ms.counters {
+		counters[name] = metric.Value
+	}
+
+	return gauges, counters
+}
