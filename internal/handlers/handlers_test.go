@@ -8,8 +8,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/GarikMirzoyan/metricalert/internal/database/mocks"
 	"github.com/GarikMirzoyan/metricalert/internal/metrics"
 	"github.com/go-chi/chi"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -164,4 +166,46 @@ func TestGetValueHandlerPost(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "test_gauge", resp.ID)
 	assert.Equal(t, "gauge", resp.MType)
+}
+
+func TestPingDBHandler_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockDBConn := mocks.NewMockDBConn(ctrl)
+
+	mockDBConn.EXPECT().Ping(gomock.Any()).Return(nil)
+
+	handler := &DBHandler{
+		DBConn: mockDBConn,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	w := httptest.NewRecorder()
+
+	handler.PingDBHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestPingDBHandler_Error(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockDBConn := mocks.NewMockDBConn(ctrl)
+
+	mockDBConn.EXPECT().Ping(gomock.Any()).Return(fmt.Errorf("database error"))
+
+	handler := &DBHandler{
+		DBConn: mockDBConn,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	w := httptest.NewRecorder()
+
+	handler.PingDBHandler(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	assert.Contains(t, w.Body.String(), "Произошла ошибка")
 }

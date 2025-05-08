@@ -8,26 +8,33 @@ import (
 
 // Структура конфигурации для сервера
 type Config struct {
-	StoreInterval   time.Duration
-	FileStoragePath string
-	Restore         bool
-	Address         string
+	StoreInterval      time.Duration
+	FileStoragePath    string
+	Restore            bool
+	Address            string
+	DBConnectionString string
 }
 
 func InitConfig() Config {
 	defaultStoreInterval := 30 * time.Second
 	defaultFileStoragePath := "../../internal/metrics/data/metrics.json"
 	defaultRestore := true
+	defaultDBConnectionString := "postgres://mirzoangarikaregovic@localhost:5432/metricalert"
 
 	defaultAddress := "localhost:8080"
 	address := flag.String("a", defaultAddress, "HTTP server address (without http:// or https://)")
 	storeInterval := flag.Int("i", int(defaultStoreInterval.Seconds()), "Interval for saving metrics (in seconds)")
 	fileStoragePath := flag.String("f", defaultFileStoragePath, "Path to file where metrics will be saved")
 	restore := flag.Bool("r", defaultRestore, "Restore metrics from file on start (true/false)")
+	DBConnectionString := flag.String("d", defaultDBConnectionString, "DB connction string")
 	flag.Parse()
 
 	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
 		*address = envAddress
+	}
+
+	if envDBDSN := os.Getenv("DATABASE_DSN"); envDBDSN != "" {
+		*address = envDBDSN
 	}
 
 	// Чтение из переменных окружения
@@ -46,9 +53,10 @@ func InitConfig() Config {
 	}
 
 	return Config{
-		StoreInterval:   time.Duration(*storeInterval) * time.Second,
-		FileStoragePath: *fileStoragePath,
-		Restore:         *restore,
-		Address:         *address,
+		StoreInterval:      time.Duration(*storeInterval) * time.Second,
+		FileStoragePath:    *fileStoragePath,
+		Restore:            *restore,
+		Address:            *address,
+		DBConnectionString: *DBConnectionString,
 	}
 }
