@@ -1,9 +1,7 @@
 package server
 
 import (
-	"flag"
 	"net/http"
-	"os"
 
 	"github.com/GarikMirzoyan/metricalert/internal/handlers"
 	"github.com/GarikMirzoyan/metricalert/internal/metrics"
@@ -39,16 +37,6 @@ func Run() {
 	server := NewServer(storage, logger, config)
 	handlers := handlers.NewHandlers(storage)
 
-	addressEnv := os.Getenv("ADDRESS")
-
-	defaultAddress := "localhost:8080"
-	address := flag.String("a", defaultAddress, "HTTP server address (without http:// or https://)")
-	flag.Parse()
-
-	if addressEnv != "" {
-		*address = addressEnv
-	}
-
 	r := chi.NewRouter()
 
 	// Загружаем метрики, если указано
@@ -72,8 +60,8 @@ func Run() {
 	r.Get("/value/{type}/{name}", handlers.GetValueHandler)
 	r.Get("/", handlers.RootHandler)
 
-	server.logger.Info("Starting server", zap.String("address", *address))
-	if err := http.ListenAndServe(*address, r); err != nil {
+	server.logger.Info("Starting server", zap.String("address", config.Address))
+	if err := http.ListenAndServe(config.Address, r); err != nil {
 		server.logger.Error("Error starting server", zap.Error(err))
 	}
 

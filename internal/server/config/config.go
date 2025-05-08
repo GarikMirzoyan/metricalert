@@ -11,6 +11,7 @@ type Config struct {
 	StoreInterval   time.Duration
 	FileStoragePath string
 	Restore         bool
+	Address         string
 }
 
 func InitConfig() Config {
@@ -18,10 +19,16 @@ func InitConfig() Config {
 	defaultFileStoragePath := "../../internal/metrics/data/metrics.json"
 	defaultRestore := true
 
+	defaultAddress := "localhost:8080"
+	address := flag.String("a", defaultAddress, "HTTP server address (without http:// or https://)")
 	storeInterval := flag.Int("i", int(defaultStoreInterval.Seconds()), "Interval for saving metrics (in seconds)")
 	fileStoragePath := flag.String("f", defaultFileStoragePath, "Path to file where metrics will be saved")
 	restore := flag.Bool("r", defaultRestore, "Restore metrics from file on start (true/false)")
 	flag.Parse()
+
+	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
+		*address = envAddress
+	}
 
 	// Чтение из переменных окружения
 	if envStoreInterval := os.Getenv("STORE_INTERVAL"); envStoreInterval != "" {
@@ -42,5 +49,6 @@ func InitConfig() Config {
 		StoreInterval:   time.Duration(*storeInterval) * time.Second,
 		FileStoragePath: *fileStoragePath,
 		Restore:         *restore,
+		Address:         *address,
 	}
 }
