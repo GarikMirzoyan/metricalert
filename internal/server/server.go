@@ -40,7 +40,6 @@ func Run() {
 	dbConn, err := database.NewDBConnection(config.DBConnectionString) // Возвращает тип, который реализует интерфейс DBConn
 	if err != nil {
 		logger.Error("Error connecting to database: %v", zap.Error(err))
-		return
 	}
 	defer dbConn.Close() // Закрытие соединения через интерфейс
 
