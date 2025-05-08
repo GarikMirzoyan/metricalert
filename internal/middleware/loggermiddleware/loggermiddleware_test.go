@@ -45,6 +45,7 @@ func TestLoggerMiddleware_BasicFlow(t *testing.T) {
 	handlerToTest.ServeHTTP(w, req)
 
 	resp := w.Result()
+	defer resp.Body.Close()
 
 	// проверка статуса
 	if resp.StatusCode != http.StatusTeapot {
