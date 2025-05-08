@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"net/http"
 
@@ -27,6 +28,10 @@ func (h *Handlers) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	metricType := chi.URLParam(r, "type")
 	metricName := chi.URLParam(r, "name")
 	metricValue := chi.URLParam(r, "value")
+
+	fmt.Println("Тип:", metricType)
+	fmt.Println("Имя:", metricName)
+	fmt.Println("Значение:", metricValue)
 
 	if metricName == "" {
 		http.Error(w, "Metric name not provided", http.StatusNotFound)

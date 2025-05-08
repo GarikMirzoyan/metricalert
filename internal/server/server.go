@@ -7,8 +7,8 @@ import (
 
 	"github.com/GarikMirzoyan/metricalert/internal/handlers"
 	"github.com/GarikMirzoyan/metricalert/internal/metrics"
-	"github.com/GarikMirzoyan/metricalert/internal/middleware/gzip_middleware"
-	"github.com/GarikMirzoyan/metricalert/internal/middleware/logger_middleware"
+	"github.com/GarikMirzoyan/metricalert/internal/middleware/gzipmiddleware"
+	"github.com/GarikMirzoyan/metricalert/internal/middleware/loggermiddleware"
 	"github.com/GarikMirzoyan/metricalert/internal/server/config"
 	"github.com/go-chi/chi"
 	"go.uber.org/zap"
@@ -61,10 +61,10 @@ func Run() {
 
 	// Добавляем middleware для логирования и сжатия
 	r.Use(func(next http.Handler) http.Handler {
-		return logger_middleware.Logger(next, logger)
+		return loggermiddleware.Logger(next, logger)
 	})
-	r.Use(gzip_middleware.GzipDecompression) // Разжатие входящих данных
-	r.Use(gzip_middleware.GzipCompression)   // Сжатие исходящих данных
+	r.Use(gzipmiddleware.GzipDecompression) // Разжатие входящих данных
+	r.Use(gzipmiddleware.GzipCompression)   // Сжатие исходящих данных
 
 	r.Post("/update/{type}/{name}/{value}", handlers.UpdateHandler)
 	r.Post("/update/", handlers.UpdateHandlerJSON)

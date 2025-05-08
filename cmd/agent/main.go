@@ -8,6 +8,6 @@ import (
 func main() {
 	config := config.InitConfig()
 
-	agent := agent.NewAgent(config.Address, config.PollInterval, config.ReportInterval)
+	agent := agent.NewAgent(config)
 	agent.Run()
 }

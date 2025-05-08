@@ -1,8 +1,11 @@
 package metrics
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand/v2"
 	"net/http"
 	"os"
@@ -12,7 +15,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GarikMirzoyan/metricalert/internal/server/config"
+	// Используем псевдонимы для избежания конфликта имен
+	agentConfig "github.com/GarikMirzoyan/metricalert/internal/agent/config"
+	serverConfig "github.com/GarikMirzoyan/metricalert/internal/server/config"
+
 	"go.uber.org/zap"
 )
 
@@ -127,7 +133,7 @@ func CollectMetrics() map[string]Gauge {
 }
 
 // Загрузка метрик из файла
-func (ms *MemStorage) LoadMetricsFromFile(config config.Config) error {
+func (ms *MemStorage) LoadMetricsFromFile(config serverConfig.Config) error {
 	if !config.Restore {
 		return nil
 	}
@@ -162,7 +168,7 @@ func (ms *MemStorage) LoadMetricsFromFile(config config.Config) error {
 	return nil
 }
 
-func (ms *MemStorage) SaveMetricsToFile(config config.Config) error {
+func (ms *MemStorage) SaveMetricsToFile(config serverConfig.Config) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 
@@ -199,7 +205,7 @@ func (ms *MemStorage) SaveMetricsToFile(config config.Config) error {
 }
 
 // Функция для периодического сохранения метрик
-func (ms *MemStorage) StartMetricSaving(config config.Config, logger *zap.Logger) {
+func (ms *MemStorage) StartMetricSaving(config serverConfig.Config, logger *zap.Logger) {
 	if config.StoreInterval == 0 {
 		// Сохраняем синхронно
 		if err := ms.SaveMetricsToFile(config); err != nil {
@@ -215,10 +221,11 @@ func (ms *MemStorage) StartMetricSaving(config config.Config, logger *zap.Logger
 	}
 }
 
-func (ms *MemStorage) UpdateMetrics(metricType, metricValue, metricName string) error {
+func (ms *MemStorage) UpdateMetrics(metricType, metricName, metricValue string) error {
 	switch MetricType(metricType) {
 	case GaugeName:
 		value, err := strconv.ParseFloat(metricValue, 64)
+		fmt.Println("Ошибка:", err)
 		if err != nil {
 			return ErrInvalidMetricValue
 		}
@@ -349,4 +356,50 @@ func (ms *MemStorage) GetAllMetrics() (map[string]float64, map[string]int64) {
 	}
 
 	return gauges, counters
+}
+
+func SendMetric(metric Metrics, config agentConfig.Config) {
+	url := fmt.Sprintf("%s/update/", config.Address)
+
+	body, err := json.Marshal(metric)
+	if err != nil {
+		fmt.Printf("Error marshalling JSON: %v\n", err)
+		return
+	}
+
+	// Сжимаем данные перед отправкой
+	compressedBody, err := compressGzip(body)
+	if err != nil {
+		fmt.Printf("Error compressing data: %v\n", err)
+		return
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(compressedBody))
+	if err != nil {
+		fmt.Printf("Error creating request: %v\n", err)
+		return
+	}
+
+	// Устанавливаем заголовки для gzip
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Printf("Error sending request: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+}
+
+// Функция для сжатия данных в формате gzip
+func compressGzip(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	gzipWriter := gzip.NewWriter(&buf)
+	_, err := gzipWriter.Write(data)
+	if err != nil {
+		return nil, err
+	}
+	gzipWriter.Close()
+	return buf.Bytes(), nil
 }
