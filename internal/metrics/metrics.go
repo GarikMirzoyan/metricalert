@@ -58,8 +58,8 @@ var (
 	ErrInvalidMetricType  = errors.New("invalid metric type")
 	ErrInvalidMetricValue = errors.New("invalid metric value")
 	ErrInvalidMetricDelta = errors.New("invalid metric delta")
-	ErrInvalidJson        = errors.New("invalid JSON")
-	ErrInvalidMetricId    = errors.New("metric ID is required")
+	ErrInvalidJSON        = errors.New("invalid JSON")
+	ErrInvalidMetricID    = errors.New("metric ID is required")
 )
 
 func NewMemStorage() *MemStorage {
@@ -242,15 +242,15 @@ func (ms *MemStorage) UpdateMetrics(metricType, metricName, metricValue string) 
 	return nil
 }
 
-func (ms *MemStorage) UpdateMetricsFromJson(r *http.Request) (Metrics, error) {
+func (ms *MemStorage) UpdateMetricsFromJSON(r *http.Request) (Metrics, error) {
 
 	var request Metrics
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		return Metrics{}, ErrInvalidJson
+		return Metrics{}, ErrInvalidJSON
 	}
 
 	if request.ID == "" {
-		return Metrics{}, ErrInvalidMetricId
+		return Metrics{}, ErrInvalidMetricID
 	}
 
 	// Создаём структуру для ответа
@@ -281,11 +281,11 @@ func (ms *MemStorage) UpdateMetricsFromJson(r *http.Request) (Metrics, error) {
 	return response, nil
 }
 
-func (ms *MemStorage) GetMetricsFromJson(r *http.Request) (Metrics, error) {
+func (ms *MemStorage) GetMetricsFromJSON(r *http.Request) (Metrics, error) {
 
 	var request Metrics
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		return Metrics{}, ErrInvalidJson
+		return Metrics{}, ErrInvalidJSON
 	}
 	if request.MType == "" {
 		return Metrics{}, ErrInvalidMetricType

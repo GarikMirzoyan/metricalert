@@ -61,7 +61,7 @@ func (h *Handlers) UpdateHandlerJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.ms.UpdateMetricsFromJson(r)
+	response, err := h.ms.UpdateMetricsFromJSON(r)
 	if err != nil {
 		switch err {
 		case metrics.ErrInvalidMetricValue:
@@ -116,7 +116,7 @@ func (h *Handlers) GetValueHandlerPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.ms.GetMetricsFromJson(r)
+	response, err := h.ms.GetMetricsFromJSON(r)
 	if err != nil {
 		switch err {
 		case metrics.ErrMetricNotFound:

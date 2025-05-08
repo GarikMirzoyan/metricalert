@@ -68,21 +68,21 @@ func TestUpdateMetricsInvalidType(t *testing.T) {
 	assert.Equal(t, ErrInvalidMetricType, err)
 }
 
-func TestUpdateMetricsFromJson(t *testing.T) {
+func TestUpdateMetricsFromJSON(t *testing.T) {
 	request := &http.Request{
 		Body:   mockBody(`{"id": "test_gauge", "type": "gauge", "value": 15.5}`),
 		Header: make(http.Header),
 	}
 	ms := NewMemStorage()
 
-	metric, err := ms.UpdateMetricsFromJson(request)
+	metric, err := ms.UpdateMetricsFromJSON(request)
 	assert.NoError(t, err)
 	assert.Equal(t, "test_gauge", metric.ID)
 	assert.Equal(t, "gauge", metric.MType)
 	assert.Equal(t, 15.5, *metric.Value)
 }
 
-func TestGetMetricsFromJson(t *testing.T) {
+func TestGetMetricsFromJSON(t *testing.T) {
 	request := &http.Request{
 		Body:   mockBody(`{"id": "test_gauge", "type": "gauge"}`),
 		Header: make(http.Header),
@@ -90,7 +90,7 @@ func TestGetMetricsFromJson(t *testing.T) {
 	ms := NewMemStorage()
 	ms.UpdateGauge("test_gauge", 10.5)
 
-	metric, err := ms.GetMetricsFromJson(request)
+	metric, err := ms.GetMetricsFromJSON(request)
 	assert.NoError(t, err)
 	assert.Equal(t, "test_gauge", metric.ID)
 	assert.Equal(t, "gauge", metric.MType)
@@ -158,14 +158,14 @@ func TestGetAllMetrics(t *testing.T) {
 	assert.Equal(t, int64(15), counters["counter_1"])
 }
 
-func TestUpdateMetricsFromJsonInvalidJson(t *testing.T) {
+func TestUpdateMetricsFromJSONInvalidJson(t *testing.T) {
 	request := &http.Request{
 		Body:   mockBody(`{"id": "test_gauge", "type": "gauge", "value": "invalid"}`),
 		Header: make(http.Header),
 	}
 	ms := NewMemStorage()
 
-	_, err := ms.UpdateMetricsFromJson(request)
+	_, err := ms.UpdateMetricsFromJSON(request)
 	assert.Error(t, err)
-	assert.Equal(t, ErrInvalidJson, err)
+	assert.Equal(t, ErrInvalidJSON, err)
 }
