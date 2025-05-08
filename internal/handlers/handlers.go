@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
 
+	"github.com/GarikMirzoyan/metricalert/internal/database"
 	"github.com/GarikMirzoyan/metricalert/internal/metrics"
 	"github.com/go-chi/chi"
 )
@@ -14,6 +16,16 @@ import (
 type Handlers struct {
 	ms   *metrics.MemStorage
 	tmpl *template.Template
+}
+
+type DBHandler struct {
+	DBConn database.DBConn
+}
+
+func NewDBHandler(DBConn database.DBConn) *DBHandler {
+	DBHandler := &DBHandler{DBConn: DBConn}
+
+	return DBHandler
 }
 
 // NewHandlers создаёт новый Handlers
@@ -176,4 +188,14 @@ func (h *Handlers) InitTemplate() {
         </html>
     `
 	h.tmpl = template.Must(template.New("metrics").Parse(tmpl))
+}
+
+func (h *DBHandler) PingDBHandler(w http.ResponseWriter, r *http.Request) {
+	err := h.DBConn.Ping(context.Background())
+
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Произошла ошибка: %v", err), http.StatusInternalServerError)
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
