@@ -34,7 +34,7 @@ func InitConfig() Config {
 	}
 
 	if envDBDSN := os.Getenv("DATABASE_DSN"); envDBDSN != "" {
-		*address = envDBDSN
+		*DBConnectionString = envDBDSN
 	}
 
 	// Чтение из переменных окружения
