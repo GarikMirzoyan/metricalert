@@ -19,7 +19,8 @@ func InitConfig() Config {
 	defaultStoreInterval := 30 * time.Second
 	defaultFileStoragePath := "../../internal/metrics/data/metrics.json"
 	defaultRestore := true
-	defaultDBConnectionString := "postgres://mirzoangarikaregovic@localhost:5432/metricalert"
+	//"postgres://mirzoangarikaregovic@localhost:5432/metricalert"
+	defaultDBConnectionString := ""
 
 	defaultAddress := "localhost:8080"
 	address := flag.String("a", defaultAddress, "HTTP server address (without http:// or https://)")

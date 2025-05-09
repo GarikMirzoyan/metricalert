@@ -36,17 +36,6 @@ func Run() {
 	storage := metrics.NewMemStorage()
 
 	server := NewServer(storage, logger, config)
-	var dbConn database.DBConn
-	dbConn, err := database.NewDBConnection(config.DBConnectionString) // Возвращает тип, который реализует интерфейс DBConn
-	if err != nil {
-		logger.Error("Error connecting to database: %v", zap.Error(err))
-	} else {
-		defer dbConn.Close()
-	}
-
-	DBHandler := handlers.NewDBHandler(dbConn)
-
-	handlers := handlers.NewHandlers(storage)
 
 	r := chi.NewRouter()
 
@@ -58,8 +47,22 @@ func Run() {
 	// Запускаем сохранение метрик
 	go storage.StartMetricSaving(server.config, server.logger)
 
-	SetRoutes(r, handlers, logger)
-	SetDBRoutes(r, DBHandler)
+	if config.DBConnectionString == "" {
+		// Работаем с in-memory storage
+		handlers := handlers.NewHandlers(storage)
+		SetMSRoutes(r, handlers, logger)
+	} else {
+		// Работаем с БД
+		dbConn, err := database.NewDBConnection(config.DBConnectionString)
+		if err != nil {
+			logger.Error("Error connecting to database", zap.Error(err))
+		} else {
+			defer dbConn.Close()
+			dbHandler := handlers.NewDBHandler(dbConn)
+			SetDBRoutes(r, dbHandler)
+
+		}
+	}
 
 	server.logger.Info("Starting server", zap.String("address", config.Address))
 	if err := http.ListenAndServe(config.Address, r); err != nil {
@@ -71,7 +74,7 @@ func Run() {
 	}
 }
 
-func SetRoutes(r *chi.Mux, handlers *handlers.Handlers, logger *zap.Logger) {
+func SetMSRoutes(r *chi.Mux, handlers *handlers.Handlers, logger *zap.Logger) {
 	// Добавляем middleware для логирования и сжатия
 	r.Use(func(next http.Handler) http.Handler {
 		return loggermiddleware.Logger(next, logger)
@@ -89,5 +92,10 @@ func SetRoutes(r *chi.Mux, handlers *handlers.Handlers, logger *zap.Logger) {
 }
 
 func SetDBRoutes(r *chi.Mux, DBHandler *handlers.DBHandler) {
+	r.Post("/update/{type}/{name}/{value}", DBHandler.UpdateMetricDBHandler)
+	r.Post("/update/", DBHandler.UpdateMetricDBHandlerJSON)
+	r.Get("/value/{type}/{name}", DBHandler.GetMetricValueDBHandler)
+	r.Post("/value/", DBHandler.GetValueDBHandlerPost)
+	r.Get("/", DBHandler.RootDBHandler)
 	r.Get("/ping", DBHandler.PingDBHandler)
 }
