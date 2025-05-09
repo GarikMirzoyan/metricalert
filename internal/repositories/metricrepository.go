@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/GarikMirzoyan/metricalert/internal/database"
+	"github.com/GarikMirzoyan/metricalert/internal/models"
 )
 
 type MetricRepository struct {
@@ -82,4 +83,45 @@ func (mr *MetricRepository) GetAllMetrics(ctx context.Context) (map[string]float
 	}
 
 	return gauges, counters, nil
+}
+
+func (mr *MetricRepository) BatchUpdate(metrics []models.Metrics, ctx context.Context) error {
+	tx, err := mr.DBConn.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	for _, m := range metrics {
+
+		switch m.MType {
+		case "gauge":
+			if m.Value == nil {
+				continue
+			}
+			_, err = tx.Exec(ctx, `
+                INSERT INTO metrics (name, type, value)
+                VALUES ($1, 'gauge', $2)
+                ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value
+            `, m.ID, *m.Value)
+
+		case "counter":
+			if m.Delta == nil {
+				continue
+			}
+			_, err = tx.Exec(ctx, `
+                INSERT INTO metrics (name, type, value)
+                VALUES ($1, 'counter', $2)
+                ON CONFLICT (name) DO UPDATE SET value = metrics.value + EXCLUDED.value
+            `, m.ID, *m.Delta)
+		default:
+			continue
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit(ctx)
 }

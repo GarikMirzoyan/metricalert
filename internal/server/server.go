@@ -59,7 +59,7 @@ func Run() {
 		} else {
 			defer dbConn.Close()
 			dbHandler := handlers.NewDBHandler(dbConn)
-			SetDBRoutes(r, dbHandler)
+			SetDBRoutes(r, dbHandler, logger)
 
 		}
 	}
@@ -91,9 +91,17 @@ func SetMSRoutes(r *chi.Mux, handlers *handlers.Handlers, logger *zap.Logger) {
 
 }
 
-func SetDBRoutes(r *chi.Mux, DBHandler *handlers.DBHandler) {
+func SetDBRoutes(r *chi.Mux, DBHandler *handlers.DBHandler, logger *zap.Logger) {
+	// Добавляем middleware для логирования и сжатия
+	r.Use(func(next http.Handler) http.Handler {
+		return loggermiddleware.Logger(next, logger)
+	})
+	r.Use(gzipmiddleware.GzipDecompression) // Разжатие входящих данных
+	r.Use(gzipmiddleware.GzipCompression)   // Сжатие исходящих данных
+
 	r.Post("/update/{type}/{name}/{value}", DBHandler.UpdateMetricDBHandler)
 	r.Post("/update/", DBHandler.UpdateMetricDBHandlerJSON)
+	r.Post("/updates/", DBHandler.BatchMetricsUpdateHandler)
 	r.Get("/value/{type}/{name}", DBHandler.GetMetricValueDBHandler)
 	r.Post("/value/", DBHandler.GetValueDBHandlerPost)
 	r.Get("/", DBHandler.RootDBHandler)

@@ -60,3 +60,7 @@ func (db *DB) QueryRow(ctx context.Context, sql string, arguments ...any) pgx.Ro
 func (db *DB) Query(ctx context.Context, sql string, arguments ...any) (pgx.Rows, error) {
 	return db.Conn.Query(ctx, sql, arguments...)
 }
+
+func (db *DB) Begin(ctx context.Context) (pgx.Tx, error) {
+	return db.Conn.Begin(ctx)
+}

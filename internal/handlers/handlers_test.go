@@ -11,6 +11,7 @@ import (
 
 	"github.com/GarikMirzoyan/metricalert/internal/database/mocks"
 	"github.com/GarikMirzoyan/metricalert/internal/metrics"
+	"github.com/GarikMirzoyan/metricalert/internal/models"
 	"github.com/go-chi/chi"
 	"github.com/golang/mock/gomock"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -79,7 +80,7 @@ func TestUpdateHandlerJSON(t *testing.T) {
 	// Проверка результата
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	var resp metrics.Metrics
+	var resp models.Metrics
 	err := json.NewDecoder(rr.Body).Decode(&resp)
 	assert.NoError(t, err)
 	assert.Equal(t, "test_gauge", resp.ID)
@@ -163,7 +164,7 @@ func TestGetValueHandlerPost(t *testing.T) {
 	// Проверка результата
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	var resp metrics.Metrics
+	var resp models.Metrics
 	err := json.NewDecoder(rr.Body).Decode(&resp)
 	assert.NoError(t, err)
 	assert.Equal(t, "test_gauge", resp.ID)

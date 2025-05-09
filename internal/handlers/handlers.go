@@ -311,6 +311,7 @@ func (h *DBHandler) GetValueDBHandlerPost(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+		return
 	}
 }
 
@@ -335,5 +336,25 @@ func (h *DBHandler) RootDBHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.tmpl.Execute(w, data); err != nil {
 		http.Error(w, "Error rendering template", http.StatusInternalServerError)
+		return
 	}
+}
+
+func (h *DBHandler) BatchMetricsUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Content-Type") != "application/json" {
+		http.Error(w, "Invalid Content-Type", http.StatusBadRequest)
+		return
+	}
+
+	metricRepository := repositories.NewMetricRepository(h.DBConn)
+
+	err := metrics.BatchMetricsUpdate(r, metricRepository)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Произошла ошибка: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Отправляем ответ с актуальными значениями
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 }
