@@ -17,6 +17,8 @@ import (
 
 	// Используем псевдонимы для избежания конфликта имен
 	agentConfig "github.com/GarikMirzoyan/metricalert/internal/agent/config"
+	"github.com/GarikMirzoyan/metricalert/internal/models"
+	"github.com/GarikMirzoyan/metricalert/internal/repositories"
 	serverConfig "github.com/GarikMirzoyan/metricalert/internal/server/config"
 
 	"go.uber.org/zap"
@@ -44,13 +46,6 @@ type MemStorage struct {
 	gauges   map[string]GaugeMetric
 	counters map[string]CounterMetric
 	mu       sync.Mutex
-}
-
-type Metrics struct {
-	ID    string   `json:"id"`              // имя метрики
-	MType string   `json:"type"`            // параметр, принимающий значение gauge или counter
-	Delta *int64   `json:"delta,omitempty"` // значение метрики в случае передачи counter
-	Value *float64 `json:"value,omitempty"` // значение метрики в случае передачи gauge
 }
 
 var (
@@ -146,7 +141,7 @@ func (ms *MemStorage) LoadMetricsFromFile(config serverConfig.Config) error {
 
 	decoder := json.NewDecoder(file)
 	for {
-		var metric Metrics
+		var metric models.Metrics
 		if err := decoder.Decode(&metric); err != nil {
 			if err.Error() == "EOF" {
 				break
@@ -180,7 +175,7 @@ func (ms *MemStorage) SaveMetricsToFile(config serverConfig.Config) error {
 
 	encoder := json.NewEncoder(file)
 	for name, gauge := range ms.gauges {
-		metric := Metrics{
+		metric := models.Metrics{
 			ID:    name,
 			MType: string(GaugeName),
 			Value: &gauge.Value,
@@ -191,7 +186,7 @@ func (ms *MemStorage) SaveMetricsToFile(config serverConfig.Config) error {
 	}
 
 	for name, counter := range ms.counters {
-		metric := Metrics{
+		metric := models.Metrics{
 			ID:    name,
 			MType: string(CounterName),
 			Delta: &counter.Value,
@@ -242,19 +237,19 @@ func (ms *MemStorage) UpdateMetrics(metricType, metricName, metricValue string) 
 	return nil
 }
 
-func (ms *MemStorage) UpdateMetricsFromJSON(r *http.Request) (Metrics, error) {
+func (ms *MemStorage) UpdateMetricsFromJSON(r *http.Request) (models.Metrics, error) {
 
-	var request Metrics
+	var request models.Metrics
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		return Metrics{}, ErrInvalidJSON
+		return models.Metrics{}, ErrInvalidJSON
 	}
 
 	if request.ID == "" {
-		return Metrics{}, ErrInvalidMetricID
+		return models.Metrics{}, ErrInvalidMetricID
 	}
 
 	// Создаём структуру для ответа
-	response := Metrics{
+	response := models.Metrics{
 		ID:    request.ID,
 		MType: request.MType,
 	}
@@ -263,36 +258,82 @@ func (ms *MemStorage) UpdateMetricsFromJSON(r *http.Request) (Metrics, error) {
 	case GaugeName:
 		// Обновляем значение метрики типа Gauge
 		if request.Value == nil {
-			return Metrics{}, ErrInvalidMetricDelta
+			return models.Metrics{}, ErrInvalidMetricDelta
 		}
 		ms.UpdateGauge(request.ID, *request.Value)
 		response.Value = request.Value
 	case CounterName:
 		// Обновляем значение метрики типа Counter
 		if request.Delta == nil {
-			return Metrics{}, ErrInvalidMetricDelta
+			return models.Metrics{}, ErrInvalidMetricDelta
 		}
 		ms.UpdateCounter(request.ID, *request.Delta)
 		response.Delta = request.Delta
 	default:
-		return Metrics{}, ErrInvalidMetricType
+		return models.Metrics{}, ErrInvalidMetricType
 	}
 
 	return response, nil
 }
 
-func (ms *MemStorage) GetMetricsFromJSON(r *http.Request) (Metrics, error) {
+func (ms *MemStorage) UpdateBathMetricsFromJSON(r *http.Request) ([]models.Metrics, error) {
+	var requests []models.Metrics
 
-	var request Metrics
+	if err := json.NewDecoder(r.Body).Decode(&requests); err != nil {
+		return nil, ErrInvalidJSON
+	}
+
+	if len(requests) == 0 {
+		return []models.Metrics{}, nil
+	}
+
+	var responses []models.Metrics
+
+	for _, request := range requests {
+		if request.ID == "" {
+			return nil, ErrInvalidMetricID
+		}
+
+		response := models.Metrics{
+			ID:    request.ID,
+			MType: request.MType,
+		}
+
+		switch MetricType(request.MType) {
+		case GaugeName:
+			if request.Value == nil {
+				return nil, ErrInvalidMetricDelta
+			}
+			ms.UpdateGauge(request.ID, *request.Value)
+			response.Value = request.Value
+		case CounterName:
+			if request.Delta == nil {
+				return nil, ErrInvalidMetricDelta
+			}
+			ms.UpdateCounter(request.ID, *request.Delta)
+			response.Delta = request.Delta
+		default:
+			return nil, ErrInvalidMetricType
+		}
+
+		responses = append(responses, response)
+	}
+
+	return responses, nil
+}
+
+func (ms *MemStorage) GetMetricsFromJSON(r *http.Request) (models.Metrics, error) {
+
+	var request models.Metrics
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		return Metrics{}, ErrInvalidJSON
+		return models.Metrics{}, ErrInvalidJSON
 	}
 	if request.MType == "" {
-		return Metrics{}, ErrInvalidMetricType
+		return models.Metrics{}, ErrInvalidMetricType
 	}
 
 	// Создаём структуру для ответа
-	response := Metrics{
+	response := models.Metrics{
 		ID:    request.ID,
 		MType: request.MType,
 	}
@@ -303,16 +344,16 @@ func (ms *MemStorage) GetMetricsFromJSON(r *http.Request) (Metrics, error) {
 		if metric, exists := ms.GetGauge(request.ID); exists {
 			response.Value = &metric.Value
 		} else {
-			return Metrics{}, ErrMetricNotFound
+			return models.Metrics{}, ErrMetricNotFound
 		}
 	case CounterName:
 		if metric, exists := ms.GetCounter(request.ID); exists {
 			response.Delta = &metric.Value
 		} else {
-			return Metrics{}, ErrMetricNotFound
+			return models.Metrics{}, ErrMetricNotFound
 		}
 	default:
-		return Metrics{}, ErrInvalidMetricType
+		return models.Metrics{}, ErrInvalidMetricType
 	}
 
 	return response, nil
@@ -358,10 +399,44 @@ func (ms *MemStorage) GetAllMetrics() (map[string]float64, map[string]int64) {
 	return gauges, counters
 }
 
-func SendMetric(metric Metrics, config agentConfig.Config) {
+func SendMetric(metric models.Metrics, config agentConfig.Config) {
 	url := fmt.Sprintf("%s/update/", config.Address)
 
 	body, err := json.Marshal(metric)
+	if err != nil {
+		fmt.Printf("Error marshalling JSON: %v\n", err)
+		return
+	}
+
+	// Сжимаем данные перед отправкой
+	compressedBody, err := compressGzip(body)
+	if err != nil {
+		fmt.Printf("Error compressing data: %v\n", err)
+		return
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(compressedBody))
+	if err != nil {
+		fmt.Printf("Error creating request: %v\n", err)
+		return
+	}
+
+	// Устанавливаем заголовки для gzip
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Printf("Error sending request: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+}
+
+func SendBatchMetrics(metrics []models.Metrics, config agentConfig.Config) {
+	url := fmt.Sprintf("%s/updates/", config.Address)
+
+	body, err := json.Marshal(metrics)
 	if err != nil {
 		fmt.Printf("Error marshalling JSON: %v\n", err)
 		return
@@ -402,4 +477,111 @@ func compressGzip(data []byte) ([]byte, error) {
 	}
 	gzipWriter.Close()
 	return buf.Bytes(), nil
+}
+
+func UpdateMetricsDBFromJSON(r *http.Request, mr *repositories.MetricRepository) (models.Metrics, error) {
+
+	var request models.Metrics
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return models.Metrics{}, ErrInvalidJSON
+	}
+
+	if request.ID == "" {
+		return models.Metrics{}, ErrInvalidMetricID
+	}
+
+	// Создаём структуру для ответа
+	response := models.Metrics{
+		ID:    request.ID,
+		MType: request.MType,
+	}
+
+	switch MetricType(request.MType) {
+	case GaugeName:
+		// Обновляем значение метрики типа Gauge
+		if request.Value == nil {
+			return models.Metrics{}, ErrInvalidMetricDelta
+		}
+		err := mr.Update("gauge", request.ID, fmt.Sprintf("%f", *request.Value), r.Context())
+		if err != nil {
+			return models.Metrics{}, err
+		}
+		response.Value = request.Value
+	case CounterName:
+		// Обновляем значение метрики типа Counter
+		if request.Delta == nil {
+			return models.Metrics{}, ErrInvalidMetricDelta
+		}
+		err := mr.Update("counter", request.ID, fmt.Sprintf("%d", *request.Delta), r.Context())
+		if err != nil {
+			return models.Metrics{}, err
+		}
+		response.Delta = request.Delta
+	default:
+		return models.Metrics{}, ErrInvalidMetricType
+	}
+
+	return response, nil
+}
+
+func GetMetricsDBFromJSON(r *http.Request, mr *repositories.MetricRepository) (models.Metrics, error) {
+	var request models.Metrics
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return models.Metrics{}, ErrInvalidJSON
+	}
+	if request.MType == "" {
+		return models.Metrics{}, ErrInvalidMetricType
+	}
+
+	// Создаём структуру для ответа
+	response := models.Metrics{
+		ID:    request.ID,
+		MType: request.MType,
+	}
+
+	// Проверка на существование метрики
+	switch MetricType(request.MType) {
+	case GaugeName:
+		val, err := mr.GetGaugeValue(request.ID, r.Context())
+		if err != nil {
+			return models.Metrics{}, ErrMetricNotFound
+		}
+		response.Value = &val // val уже float64
+
+	case CounterName:
+		val, err := mr.GetCounterValue(request.ID, r.Context()) // int64
+		if err != nil {
+			return models.Metrics{}, ErrMetricNotFound
+		}
+		response.Delta = &val
+
+	default:
+		return models.Metrics{}, ErrInvalidMetricType
+	}
+
+	return response, nil
+}
+
+func BatchMetricsUpdate(r *http.Request, mr *repositories.MetricRepository) error {
+
+	if r.Body == nil {
+		return errors.New("request body is empty")
+	}
+	defer r.Body.Close()
+
+	var metrics []models.Metrics
+
+	if err := json.NewDecoder(r.Body).Decode(&metrics); err != nil {
+		return fmt.Errorf("failed to decode metrics: %w", err)
+	}
+
+	if len(metrics) == 0 {
+		return nil // Нет метрик — ничего не делаем
+	}
+
+	if err := mr.BatchUpdate(metrics, r.Context()); err != nil {
+		return fmt.Errorf("failed to batch update metrics: %w", err)
+	}
+
+	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	agentConfig "github.com/GarikMirzoyan/metricalert/internal/agent/config"
+	"github.com/GarikMirzoyan/metricalert/internal/models"
 	serverConfig "github.com/GarikMirzoyan/metricalert/internal/server/config"
 	"github.com/stretchr/testify/assert"
 )
@@ -119,7 +120,7 @@ func TestSendMetric(t *testing.T) {
 	config := agentConfig.Config{
 		Address: "http://localhost:8080",
 	}
-	metric := Metrics{
+	metric := models.Metrics{
 		ID:    "test_gauge",
 		MType: string(GaugeName),
 		Value: float64Ptr(10.5),
