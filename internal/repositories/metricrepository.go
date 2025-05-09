@@ -16,8 +16,8 @@ func NewMetricRepository(DBConn database.DBConn) *MetricRepository {
 	return MetricRepository
 }
 
-func (ms *MetricRepository) Update(metricType string, metricName string, metricValue string, ctx context.Context) error {
-	_, err := ms.DBConn.Exec(ctx, `
+func (mr *MetricRepository) Update(metricType string, metricName string, metricValue string, ctx context.Context) error {
+	_, err := mr.DBConn.Exec(ctx, `
         INSERT INTO metrics (name, type, value)
         VALUES ($1, $2, $3::double precision)
         ON CONFLICT (name) DO UPDATE
@@ -27,9 +27,9 @@ func (ms *MetricRepository) Update(metricType string, metricName string, metricV
 	return err
 }
 
-func (ms *MetricRepository) GetGaugeValue(metricName string, ctx context.Context) (float64, error) {
+func (mr *MetricRepository) GetGaugeValue(metricName string, ctx context.Context) (float64, error) {
 	var value float64
-	err := ms.DBConn.QueryRow(ctx, `
+	err := mr.DBConn.QueryRow(ctx, `
 		SELECT value FROM metrics WHERE name = $1 AND type = 'gauge'
 	`, metricName).Scan(&value)
 	if err != nil {
@@ -38,9 +38,9 @@ func (ms *MetricRepository) GetGaugeValue(metricName string, ctx context.Context
 	return value, nil
 }
 
-func (ms *MetricRepository) GetCounterValue(metricName string, ctx context.Context) (int64, error) {
+func (mr *MetricRepository) GetCounterValue(metricName string, ctx context.Context) (int64, error) {
 	var value int64
-	err := ms.DBConn.QueryRow(ctx, `
+	err := mr.DBConn.QueryRow(ctx, `
 		SELECT value FROM metrics WHERE name = $1 AND type = 'counter'
 	`, metricName).Scan(&value)
 	if err != nil {
