@@ -17,6 +17,7 @@ import (
 
 	// Используем псевдонимы для избежания конфликта имен
 	agentConfig "github.com/GarikMirzoyan/metricalert/internal/agent/config"
+	"github.com/GarikMirzoyan/metricalert/internal/repositories"
 	serverConfig "github.com/GarikMirzoyan/metricalert/internal/server/config"
 
 	"go.uber.org/zap"
@@ -402,4 +403,87 @@ func compressGzip(data []byte) ([]byte, error) {
 	}
 	gzipWriter.Close()
 	return buf.Bytes(), nil
+}
+
+func UpdateMetricsDBFromJSON(r *http.Request, mr *repositories.MetricRepository) (Metrics, error) {
+
+	var request Metrics
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return Metrics{}, ErrInvalidJSON
+	}
+
+	if request.ID == "" {
+		return Metrics{}, ErrInvalidMetricID
+	}
+
+	// Создаём структуру для ответа
+	response := Metrics{
+		ID:    request.ID,
+		MType: request.MType,
+	}
+
+	switch MetricType(request.MType) {
+	case GaugeName:
+		// Обновляем значение метрики типа Gauge
+		if request.Value == nil {
+			return Metrics{}, ErrInvalidMetricDelta
+		}
+		err := mr.Update("gauge", request.ID, fmt.Sprintf("%f", *request.Value), r.Context())
+		if err != nil {
+			return Metrics{}, err
+		}
+		response.Value = request.Value
+	case CounterName:
+		// Обновляем значение метрики типа Counter
+		if request.Delta == nil {
+			return Metrics{}, ErrInvalidMetricDelta
+		}
+		err := mr.Update("counter", request.ID, fmt.Sprintf("%d", *request.Delta), r.Context())
+		if err != nil {
+			return Metrics{}, err
+		}
+		response.Delta = request.Delta
+	default:
+		return Metrics{}, ErrInvalidMetricType
+	}
+
+	return response, nil
+}
+
+func GetMetricsDBFromJSON(r *http.Request, mr *repositories.MetricRepository) (Metrics, error) {
+	var request Metrics
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return Metrics{}, ErrInvalidJSON
+	}
+	if request.MType == "" {
+		return Metrics{}, ErrInvalidMetricType
+	}
+
+	// Создаём структуру для ответа
+	response := Metrics{
+		ID:    request.ID,
+		MType: request.MType,
+	}
+
+	// Проверка на существование метрики
+	switch MetricType(request.MType) {
+	case GaugeName:
+		val, err := mr.GetGaugeValue(request.ID, r.Context())
+		if err != nil {
+			return Metrics{}, ErrMetricNotFound
+		}
+		response.Value = &val // val уже float64
+
+	case CounterName:
+		val, err := mr.GetCounterValue(request.ID, r.Context()) // int64
+		if err != nil {
+			return Metrics{}, ErrMetricNotFound
+		}
+		response.Delta = &val
+
+	default:
+		return Metrics{}, ErrInvalidMetricType
+	}
+
+	return response, nil
 }

@@ -2,14 +2,18 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/GarikMirzoyan/metricalert/internal/database/mocks"
 	"github.com/GarikMirzoyan/metricalert/internal/metrics"
 	"github.com/go-chi/chi"
+	"github.com/golang/mock/gomock"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -164,4 +168,106 @@ func TestGetValueHandlerPost(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "test_gauge", resp.ID)
 	assert.Equal(t, "gauge", resp.MType)
+}
+
+func TestPingDBHandler_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockDBConn := mocks.NewMockDBConn(ctrl)
+
+	mockDBConn.EXPECT().Ping(gomock.Any()).Return(nil)
+
+	handler := &DBHandler{
+		DBConn: mockDBConn,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	w := httptest.NewRecorder()
+
+	handler.PingDBHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestPingDBHandler_Error(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockDBConn := mocks.NewMockDBConn(ctrl)
+
+	mockDBConn.EXPECT().Ping(gomock.Any()).Return(fmt.Errorf("database error"))
+
+	handler := &DBHandler{
+		DBConn: mockDBConn,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	w := httptest.NewRecorder()
+
+	handler.PingDBHandler(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	assert.Contains(t, w.Body.String(), "Произошла ошибка")
+}
+
+func TestUpdateMetricDBHandler_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockDBConn := mocks.NewMockDBConn(ctrl)
+
+	// Ожидаем вызов Exec без ошибки
+	mockDBConn.
+		EXPECT().
+		Exec(gomock.Any(), gomock.Any(), "testCounter", "counter", "10").
+		Return(pgconn.NewCommandTag("INSERT 0 1"), nil)
+
+	handler := &DBHandler{
+		DBConn: mockDBConn,
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/update/counter/testCounter/10", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("type", "counter")
+	rctx.URLParams.Add("name", "testCounter")
+	rctx.URLParams.Add("value", "10")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	w := httptest.NewRecorder()
+
+	handler.UpdateMetricDBHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestUpdateMetricDBHandler_Error(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockDBConn := mocks.NewMockDBConn(ctrl)
+
+	mockDBConn.
+		EXPECT().
+		Exec(gomock.Any(), gomock.Any(), "testGauge", "gauge", "42.42").
+		Return(pgconn.NewCommandTag("INSERT 0 1"), fmt.Errorf("some DB error"))
+
+	handler := &DBHandler{
+		DBConn: mockDBConn,
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/update/gauge/testGauge/42.42", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("type", "gauge")
+	rctx.URLParams.Add("name", "testGauge")
+	rctx.URLParams.Add("value", "42.42")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	w := httptest.NewRecorder()
+
+	handler.UpdateMetricDBHandler(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "Произошла ошибка")
 }
