@@ -85,6 +85,7 @@ func SetMSRoutes(r *chi.Mux, handlers *handlers.Handlers, logger *zap.Logger) {
 	// Обработчики маршрутов
 	r.Post("/update/{type}/{name}/{value}", handlers.UpdateHandler)
 	r.Post("/update/", handlers.UpdateHandlerJSON)
+	r.Post("/updates/", handlers.BatchMetricsUpdateHandler)
 	r.Post("/value/", handlers.GetValueHandlerPost)
 	r.Get("/value/{type}/{name}", handlers.GetValueHandler)
 	r.Get("/", handlers.RootHandler)
@@ -101,7 +102,7 @@ func SetDBRoutes(r *chi.Mux, DBHandler *handlers.DBHandler, logger *zap.Logger) 
 
 	r.Post("/update/{type}/{name}/{value}", DBHandler.UpdateMetricDBHandler)
 	r.Post("/update/", DBHandler.UpdateMetricDBHandlerJSON)
-	r.Post("/updates/", DBHandler.BatchMetricsUpdateHandler)
+	r.Post("/updates/", DBHandler.BatchMetricsUpdateDBHandler)
 	r.Get("/value/{type}/{name}", DBHandler.GetMetricValueDBHandler)
 	r.Post("/value/", DBHandler.GetValueDBHandlerPost)
 	r.Get("/", DBHandler.RootDBHandler)

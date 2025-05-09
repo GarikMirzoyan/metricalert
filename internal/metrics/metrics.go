@@ -276,6 +276,52 @@ func (ms *MemStorage) UpdateMetricsFromJSON(r *http.Request) (models.Metrics, er
 	return response, nil
 }
 
+func (ms *MemStorage) UpdateBathMetricsFromJSON(r *http.Request) ([]models.Metrics, error) {
+	var requests []models.Metrics
+
+	if err := json.NewDecoder(r.Body).Decode(&requests); err != nil {
+		return nil, ErrInvalidJSON
+	}
+
+	if len(requests) == 0 {
+		return []models.Metrics{}, nil
+	}
+
+	var responses []models.Metrics
+
+	for _, request := range requests {
+		if request.ID == "" {
+			return nil, ErrInvalidMetricID
+		}
+
+		response := models.Metrics{
+			ID:    request.ID,
+			MType: request.MType,
+		}
+
+		switch MetricType(request.MType) {
+		case GaugeName:
+			if request.Value == nil {
+				return nil, ErrInvalidMetricDelta
+			}
+			ms.UpdateGauge(request.ID, *request.Value)
+			response.Value = request.Value
+		case CounterName:
+			if request.Delta == nil {
+				return nil, ErrInvalidMetricDelta
+			}
+			ms.UpdateCounter(request.ID, *request.Delta)
+			response.Delta = request.Delta
+		default:
+			return nil, ErrInvalidMetricType
+		}
+
+		responses = append(responses, response)
+	}
+
+	return responses, nil
+}
+
 func (ms *MemStorage) GetMetricsFromJSON(r *http.Request) (models.Metrics, error) {
 
 	var request models.Metrics

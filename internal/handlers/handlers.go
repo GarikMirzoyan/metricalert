@@ -19,13 +19,6 @@ type Handlers struct {
 	tmpl *template.Template
 }
 
-type Metrics struct {
-	ID    string   `json:"id"`              // имя метрики
-	MType string   `json:"type"`            // параметр, принимающий значение gauge или counter
-	Delta *int64   `json:"delta,omitempty"` // значение метрики в случае передачи counter
-	Value *float64 `json:"value,omitempty"` // значение метрики в случае передачи gauge
-}
-
 type DBHandler struct {
 	DBConn database.DBConn
 	tmpl   *template.Template
@@ -340,7 +333,7 @@ func (h *DBHandler) RootDBHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *DBHandler) BatchMetricsUpdateHandler(w http.ResponseWriter, r *http.Request) {
+func (h *DBHandler) BatchMetricsUpdateDBHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Content-Type") != "application/json" {
 		http.Error(w, "Invalid Content-Type", http.StatusBadRequest)
 		return
@@ -357,4 +350,33 @@ func (h *DBHandler) BatchMetricsUpdateHandler(w http.ResponseWriter, r *http.Req
 	// Отправляем ответ с актуальными значениями
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handlers) BatchMetricsUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Content-Type") != "application/json" {
+		http.Error(w, "Invalid Content-Type", http.StatusBadRequest)
+		return
+	}
+
+	response, err := h.ms.UpdateBathMetricsFromJSON(r)
+	if err != nil {
+		switch err {
+		case metrics.ErrInvalidMetricValue:
+			http.Error(w, "Value is required for gauge", http.StatusBadRequest)
+		case metrics.ErrInvalidMetricDelta:
+			http.Error(w, "Value is required for delta", http.StatusBadRequest)
+		case metrics.ErrInvalidMetricType:
+			http.Error(w, "Invalid metric type", http.StatusBadRequest)
+		default:
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Отправляем ответ с актуальными значениями
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+	}
 }
