@@ -391,6 +391,10 @@ func SendBatchMetrics(metrics []models.Metrics, config agentConfig.Config) {
 	url := fmt.Sprintf("%s/updates/", config.Address)
 
 	body, err := json.Marshal(metrics)
+	if err != nil {
+		fmt.Printf("Error marshalling JSON: %v\n", err)
+		return
+	}
 
 	// Сжимаем данные перед отправкой
 	compressedBody, err := compressGzip(body)
