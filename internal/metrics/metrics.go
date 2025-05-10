@@ -51,12 +51,12 @@ type MemStorage struct {
 }
 
 var (
-	ErrMetricNotFound     = errors.New("Metric not found")
-	ErrInvalidMetricType  = errors.New("Invalid metric type")
-	ErrInvalidMetricValue = errors.New("Invalid metric value")
-	ErrInvalidMetricDelta = errors.New("Invalid metric delta")
-	ErrInvalidJSON        = errors.New("Invalid JSON")
-	ErrInvalidMetricID    = errors.New("Metric ID is required")
+	ErrMetricNotFound     = errors.New("metric not found")
+	ErrInvalidMetricType  = errors.New("invalid metric type")
+	ErrInvalidMetricValue = errors.New("invalid metric value")
+	ErrInvalidMetricDelta = errors.New("invalid metric delta")
+	ErrInvalidJSON        = errors.New("invalid JSON")
+	ErrInvalidMetricID    = errors.New("metric ID is required")
 )
 
 func NewMemStorage() *MemStorage {
