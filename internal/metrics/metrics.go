@@ -226,11 +226,8 @@ func (ms *MemStorage) StartMetricSaving(config serverConfig.Config, logger *zap.
 	logger.Info("запущено периодическое сохранение метрик", zap.Duration("interval", config.StoreInterval))
 
 	for range ticker.C {
-		err := retry.WithBackoff(func() error {
-			return ms.SaveMetricsToFile(config)
-		})
-		if err != nil {
-			logger.Error("не удалось сохранить метрики после повторов", zap.Error(err))
+		if err := ms.SaveMetricsToFile(config); err != nil {
+			logger.Error("ошибка при сохранении метрик", zap.Error(err))
 		}
 	}
 }
@@ -469,24 +466,35 @@ func SendBatchMetrics(metrics []models.Metrics, config agentConfig.Config) {
 		return
 	}
 
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(compressedBody))
+	err = retry.WithBackoff(func() error {
+		req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(compressedBody))
+		if err != nil {
+			return err // ошибка создания запроса — не retriable
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Encoding", "gzip")
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return err // будет обработан как retriable, если это сетевой сбой
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 500 {
+			// временные ошибки сервера (например, 500, 503)
+			return fmt.Errorf("server error: %s", resp.Status)
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			// другие ошибки (например, 400) — не повторяем
+			return fmt.Errorf("non-retriable status: %s", resp.Status)
+		}
+
+		return nil // успех
+	})
+
 	if err != nil {
-		log.Printf("ошибка создания HTTP-запроса: %v", err)
-		return
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Content-Encoding", "gzip")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		log.Printf("ошибка при выполнении HTTP-запроса: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Printf("сервер вернул ошибочный статус: %s", resp.Status)
+		log.Printf("не удалось отправить батч метрик после повторов: %v", err)
 	}
 }
 
@@ -602,13 +610,13 @@ func BatchMetricsUpdate(r *http.Request, mr *repositories.MetricRepository) erro
 		return nil // Нет метрик — ничего не делаем
 	}
 
-	err := retry.WithBackoff(func() error {
-		return BatchMetricsUpdate(r, mr)
+	return retry.WithBackoff(func() error {
+		err := mr.BatchUpdate(metrics, r.Context())
+		if err != nil {
+			return err // ретрай
+		}
+		return err // либо nil, либо фатальная
 	})
-
-	if err != nil {
-		return fmt.Errorf("не удалось обновить метрики после повторов: %w", err)
-	}
 
 	return nil
 }

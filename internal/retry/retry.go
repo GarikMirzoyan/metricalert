@@ -7,6 +7,9 @@ import (
 	"net"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func WithBackoff(action func() error) error {
@@ -35,6 +38,25 @@ func IsRetriableError(err error) bool {
 	}
 	if errors.Is(err, io.EOF) || strings.Contains(err.Error(), "connection reset") {
 		return true
+	}
+	if IsRetriablePostgresError(err) {
+		return true
+	}
+	return false
+}
+
+func IsRetriablePostgresError(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case pgerrcode.ConnectionException,
+			pgerrcode.ConnectionDoesNotExist,
+			pgerrcode.ConnectionFailure,
+			pgerrcode.SQLClientUnableToEstablishSQLConnection,
+			pgerrcode.SQLServerRejectedEstablishmentOfSQLConnection,
+			pgerrcode.TransactionResolutionUnknown:
+			return true
+		}
 	}
 	return false
 }
