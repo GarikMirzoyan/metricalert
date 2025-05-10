@@ -3,9 +3,11 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
+	"strings"
 
 	"github.com/GarikMirzoyan/metricalert/internal/database"
 	"github.com/GarikMirzoyan/metricalert/internal/metrics"
@@ -47,7 +49,7 @@ func (h *Handlers) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Значение:", metricValue)
 
 	if metricName == "" {
-		http.Error(w, "Metric name not provided", http.StatusNotFound)
+		http.Error(w, "Имя метрики не передано", http.StatusNotFound)
 		return
 	}
 
@@ -69,19 +71,20 @@ func (h *Handlers) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) UpdateHandlerJSON(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Content-Type") != "application/json" {
+	// Проверка Content-Type
+	if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
 		http.Error(w, "Invalid Content-Type", http.StatusBadRequest)
 		return
 	}
 
 	response, err := h.ms.UpdateMetricsFromJSON(r)
 	if err != nil {
-		switch err {
-		case metrics.ErrInvalidMetricValue:
+		switch {
+		case errors.Is(err, metrics.ErrInvalidMetricValue):
 			http.Error(w, "Value is required for gauge", http.StatusBadRequest)
-		case metrics.ErrInvalidMetricDelta:
+		case errors.Is(err, metrics.ErrInvalidMetricDelta):
 			http.Error(w, "Value is required for delta", http.StatusBadRequest)
-		case metrics.ErrInvalidMetricType:
+		case errors.Is(err, metrics.ErrInvalidMetricType):
 			http.Error(w, "Invalid metric type", http.StatusBadRequest)
 		default:
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -89,11 +92,13 @@ func (h *Handlers) UpdateHandlerJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Отправляем ответ с актуальными значениями
+	// Устанавливаем правильный Content-Type для JSON ответа
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+
+	// Кодируем и отправляем ответ
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+		http.Error(w, "Ошибка получения данных", http.StatusInternalServerError)
 	}
 }
 
@@ -102,16 +107,16 @@ func (h *Handlers) GetValueHandler(w http.ResponseWriter, r *http.Request) {
 	metricName := chi.URLParam(r, "name")
 
 	if metricName == "" {
-		http.Error(w, "Metric name not provided", http.StatusNotFound)
+		http.Error(w, "Имя метрики не передано", http.StatusBadRequest)
 		return
 	}
 
 	value, err := h.ms.GetMetricValue(metricType, metricName)
 	if err != nil {
-		switch err {
-		case metrics.ErrMetricNotFound:
+		switch {
+		case errors.Is(err, metrics.ErrMetricNotFound):
 			http.Error(w, "Metric not found", http.StatusNotFound)
-		case metrics.ErrInvalidMetricType:
+		case errors.Is(err, metrics.ErrInvalidMetricType):
 			http.Error(w, "Invalid metric type", http.StatusBadRequest)
 		default:
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -119,8 +124,9 @@ func (h *Handlers) GetValueHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(value))
+	_, _ = w.Write([]byte(value))
 }
 
 func (h *Handlers) GetValueHandlerPost(w http.ResponseWriter, r *http.Request) {
@@ -145,7 +151,7 @@ func (h *Handlers) GetValueHandlerPost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+		http.Error(w, "Ошибка получения данных", http.StatusInternalServerError)
 	}
 }
 
@@ -164,7 +170,7 @@ func (h *Handlers) RootHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 
 	if err := h.tmpl.Execute(w, data); err != nil {
-		http.Error(w, "Error rendering template", http.StatusInternalServerError)
+		http.Error(w, "Ошибка при инициализации шаблона", http.StatusInternalServerError)
 	}
 }
 
@@ -218,7 +224,7 @@ func (h *DBHandler) UpdateMetricDBHandler(w http.ResponseWriter, r *http.Request
 }
 
 func (h *DBHandler) UpdateMetricDBHandlerJSON(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Content-Type") != "application/json" {
+	if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
 		http.Error(w, "Invalid Content-Type", http.StatusBadRequest)
 		return
 	}
@@ -227,12 +233,12 @@ func (h *DBHandler) UpdateMetricDBHandlerJSON(w http.ResponseWriter, r *http.Req
 
 	response, err := metrics.UpdateMetricsDBFromJSON(r, metricRepository)
 	if err != nil {
-		switch err {
-		case metrics.ErrInvalidMetricValue:
+		switch {
+		case errors.Is(err, metrics.ErrInvalidMetricValue):
 			http.Error(w, "Value is required for gauge", http.StatusBadRequest)
-		case metrics.ErrInvalidMetricDelta:
+		case errors.Is(err, metrics.ErrInvalidMetricDelta):
 			http.Error(w, "Value is required for delta", http.StatusBadRequest)
-		case metrics.ErrInvalidMetricType:
+		case errors.Is(err, metrics.ErrInvalidMetricType):
 			http.Error(w, "Invalid metric type", http.StatusBadRequest)
 		default:
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -240,9 +246,9 @@ func (h *DBHandler) UpdateMetricDBHandlerJSON(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Отправляем ответ с актуальными значениями
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "Error encoding response", http.StatusInternalServerError)
 	}
@@ -280,7 +286,7 @@ func (h *DBHandler) GetMetricValueDBHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *DBHandler) GetValueDBHandlerPost(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Content-Type") != "application/json" {
+	if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
 		http.Error(w, "Invalid Content-Type", http.StatusBadRequest)
 		return
 	}
@@ -289,10 +295,10 @@ func (h *DBHandler) GetValueDBHandlerPost(w http.ResponseWriter, r *http.Request
 
 	response, err := metrics.GetMetricsDBFromJSON(r, metricRepository)
 	if err != nil {
-		switch err {
-		case metrics.ErrMetricNotFound:
+		switch {
+		case errors.Is(err, metrics.ErrMetricNotFound):
 			http.Error(w, "Metric not found", http.StatusNotFound)
-		case metrics.ErrInvalidMetricType:
+		case errors.Is(err, metrics.ErrInvalidMetricType):
 			http.Error(w, "Invalid metric type", http.StatusBadRequest)
 		default:
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -302,9 +308,9 @@ func (h *DBHandler) GetValueDBHandlerPost(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "Error encoding response", http.StatusInternalServerError)
-		return
 	}
 }
 
@@ -360,12 +366,12 @@ func (h *Handlers) BatchMetricsUpdateHandler(w http.ResponseWriter, r *http.Requ
 
 	response, err := h.ms.UpdateBathMetricsFromJSON(r)
 	if err != nil {
-		switch err {
-		case metrics.ErrInvalidMetricValue:
+		switch {
+		case errors.Is(err, metrics.ErrInvalidMetricValue):
 			http.Error(w, "Value is required for gauge", http.StatusBadRequest)
-		case metrics.ErrInvalidMetricDelta:
+		case errors.Is(err, metrics.ErrInvalidMetricDelta):
 			http.Error(w, "Value is required for delta", http.StatusBadRequest)
-		case metrics.ErrInvalidMetricType:
+		case errors.Is(err, metrics.ErrInvalidMetricType):
 			http.Error(w, "Invalid metric type", http.StatusBadRequest)
 		default:
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
