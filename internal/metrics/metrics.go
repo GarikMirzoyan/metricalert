@@ -533,7 +533,7 @@ func UpdateMetricsDBFromJSON(r *http.Request, mr *repositories.MetricRepository)
 		if request.Value == nil {
 			return models.Metrics{}, ErrInvalidMetricDelta
 		}
-		err := mr.Update("gauge", request.ID, fmt.Sprintf("%f", *request.Value), r.Context())
+		err := mr.Update("gauge", request.ID, fmt.Sprintf("%10f", *request.Value), r.Context())
 		if err != nil {
 			return models.Metrics{}, err
 		}
