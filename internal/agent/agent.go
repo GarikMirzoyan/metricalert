@@ -5,6 +5,7 @@ import (
 
 	"github.com/GarikMirzoyan/metricalert/internal/agent/config"
 	"github.com/GarikMirzoyan/metricalert/internal/metrics"
+	"github.com/GarikMirzoyan/metricalert/internal/models"
 )
 
 type Agent struct {
@@ -31,27 +32,33 @@ func (a *Agent) Run() {
 	}()
 
 	for range tickerReport.C {
-		// Собираем метрики
-		collected := metrics.CollectMetrics()
+		var batch []models.Metrics
 
-		// Отправляем gauge-метрики
+		// Собираем gauge-метрики
+		collected := metrics.CollectMetrics()
 		for name, value := range collected {
 			val := float64(value)
-			metric := metrics.Metrics{
+			batch = append(batch, models.Metrics{
 				ID:    name,
 				MType: "gauge",
 				Value: &val,
-			}
-			metrics.SendMetric(metric, a.config)
+			})
 		}
 
-		// Отправляем PollCount как counter
+		// Добавляем PollCount как counter
 		delta := int64(a.pollCount)
-		metric := metrics.Metrics{
+		batch = append(batch, models.Metrics{
 			ID:    "PollCount",
 			MType: "counter",
 			Delta: &delta,
+		})
+
+		// Не отправляем пустой батч
+		if len(batch) == 0 {
+			continue
 		}
-		metrics.SendMetric(metric, a.config)
+
+		// Отправляем батч с метриками
+		metrics.SendBatchMetrics(batch, a.config)
 	}
 }
