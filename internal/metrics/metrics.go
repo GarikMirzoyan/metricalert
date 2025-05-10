@@ -617,6 +617,4 @@ func BatchMetricsUpdate(r *http.Request, mr *repositories.MetricRepository) erro
 		}
 		return err // либо nil, либо фатальная
 	})
-
-	return nil
 }
