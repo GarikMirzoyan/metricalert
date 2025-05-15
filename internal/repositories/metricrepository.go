@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/GarikMirzoyan/metricalert/internal/database"
 	"github.com/GarikMirzoyan/metricalert/internal/models"
@@ -44,6 +45,10 @@ func (mr *MetricRepository) GetCounterValue(metricName string, ctx context.Conte
 	err := mr.DBConn.QueryRow(ctx, `
 		SELECT value FROM metrics WHERE name = $1 AND type = 'counter'
 	`, metricName).Scan(&value)
+	if err != nil {
+		fmt.Printf("Error in GetCounterValue for metric '%s': %v\n", metricName, err)
+		return 0, err
+	}
 	if err != nil {
 		return 0, err
 	}
