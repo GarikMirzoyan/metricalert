@@ -6,11 +6,10 @@ package mocks
 
 import (
 	context "context"
+	sql "database/sql"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	pgx "github.com/jackc/pgx/v5"
-	pgconn "github.com/jackc/pgx/v5/pgconn"
 )
 
 // MockDBConn is a mock of DBConn interface.
@@ -37,10 +36,10 @@ func (m *MockDBConn) EXPECT() *MockDBConnMockRecorder {
 }
 
 // Begin mocks base method.
-func (m *MockDBConn) Begin(ctx context.Context) (pgx.Tx, error) {
+func (m *MockDBConn) Begin(ctx context.Context) (*sql.Tx, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Begin", ctx)
-	ret0, _ := ret[0].(pgx.Tx)
+	ret0, _ := ret[0].(*sql.Tx)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -64,22 +63,22 @@ func (mr *MockDBConnMockRecorder) Close() *gomock.Call {
 }
 
 // Exec mocks base method.
-func (m *MockDBConn) Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
+func (m *MockDBConn) Exec(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{ctx, sql}
-	for _, a := range arguments {
+	varargs := []interface{}{ctx, query}
+	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Exec", varargs...)
-	ret0, _ := ret[0].(pgconn.CommandTag)
+	ret0, _ := ret[0].(sql.Result)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Exec indicates an expected call of Exec.
-func (mr *MockDBConnMockRecorder) Exec(ctx, sql interface{}, arguments ...interface{}) *gomock.Call {
+func (mr *MockDBConnMockRecorder) Exec(ctx, query interface{}, args ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{ctx, sql}, arguments...)
+	varargs := append([]interface{}{ctx, query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockDBConn)(nil).Exec), varargs...)
 }
 
@@ -98,40 +97,40 @@ func (mr *MockDBConnMockRecorder) Ping(ctx interface{}) *gomock.Call {
 }
 
 // Query mocks base method.
-func (m *MockDBConn) Query(ctx context.Context, sql string, arguments ...any) (pgx.Rows, error) {
+func (m *MockDBConn) Query(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{ctx, sql}
-	for _, a := range arguments {
+	varargs := []interface{}{ctx, query}
+	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Query", varargs...)
-	ret0, _ := ret[0].(pgx.Rows)
+	ret0, _ := ret[0].(*sql.Rows)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Query indicates an expected call of Query.
-func (mr *MockDBConnMockRecorder) Query(ctx, sql interface{}, arguments ...interface{}) *gomock.Call {
+func (mr *MockDBConnMockRecorder) Query(ctx, query interface{}, args ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{ctx, sql}, arguments...)
+	varargs := append([]interface{}{ctx, query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockDBConn)(nil).Query), varargs...)
 }
 
 // QueryRow mocks base method.
-func (m *MockDBConn) QueryRow(ctx context.Context, sql string, arguments ...any) pgx.Row {
+func (m *MockDBConn) QueryRow(ctx context.Context, query string, args ...any) *sql.Row {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{ctx, sql}
-	for _, a := range arguments {
+	varargs := []interface{}{ctx, query}
+	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "QueryRow", varargs...)
-	ret0, _ := ret[0].(pgx.Row)
+	ret0, _ := ret[0].(*sql.Row)
 	return ret0
 }
 
 // QueryRow indicates an expected call of QueryRow.
-func (mr *MockDBConnMockRecorder) QueryRow(ctx, sql interface{}, arguments ...interface{}) *gomock.Call {
+func (mr *MockDBConnMockRecorder) QueryRow(ctx, query interface{}, args ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{ctx, sql}, arguments...)
+	varargs := append([]interface{}{ctx, query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryRow", reflect.TypeOf((*MockDBConn)(nil).QueryRow), varargs...)
 }

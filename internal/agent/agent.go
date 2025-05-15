@@ -20,45 +20,50 @@ func NewAgent(config config.Config) *Agent {
 	}
 }
 
-// Измененная функция отправки метрик с поддержкой gzip
 func (a *Agent) Run() {
-	tickerPoll := time.NewTicker(a.config.PollInterval)
-	tickerReport := time.NewTicker(a.config.ReportInterval)
+	go a.startPolling()
+	a.startReporting()
+}
 
-	go func() {
-		for range tickerPoll.C {
-			a.pollCount++
-		}
-	}()
+func (a *Agent) startPolling() {
+	ticker := time.NewTicker(a.config.PollInterval)
+	for range ticker.C {
+		a.pollCount++
+	}
+}
 
-	for range tickerReport.C {
-		var batch []models.Metrics
-
-		// Собираем gauge-метрики
-		collected := metrics.CollectMetrics()
-		for name, value := range collected {
-			val := float64(value)
-			batch = append(batch, models.Metrics{
-				ID:    name,
-				MType: "gauge",
-				Value: &val,
-			})
-		}
-
-		// Добавляем PollCount как counter
-		delta := int64(a.pollCount)
-		batch = append(batch, models.Metrics{
-			ID:    "PollCount",
-			MType: "counter",
-			Delta: &delta,
-		})
-
-		// Не отправляем пустой батч
+func (a *Agent) startReporting() {
+	ticker := time.NewTicker(a.config.ReportInterval)
+	for range ticker.C {
+		batch := a.prepareMetricsBatch()
 		if len(batch) == 0 {
 			continue
 		}
-
-		// Отправляем батч с метриками
 		metrics.SendBatchMetrics(batch, a.config)
 	}
+}
+
+func (a *Agent) prepareMetricsBatch() []models.Metrics {
+	var batch []models.Metrics
+
+	// Собираем gauge метрики
+	collected := metrics.CollectMetrics()
+	for name, value := range collected {
+		val := float64(value)
+		batch = append(batch, models.Metrics{
+			ID:    name,
+			MType: "gauge",
+			Value: &val,
+		})
+	}
+
+	// Добавляем PollCount как counter
+	delta := int64(a.pollCount)
+	batch = append(batch, models.Metrics{
+		ID:    "PollCount",
+		MType: "counter",
+		Delta: &delta,
+	})
+
+	return batch
 }

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/GarikMirzoyan/metricalert/internal/database"
@@ -52,16 +53,20 @@ func Run() {
 		handlers := handlers.NewHandlers(storage)
 		SetMSRoutes(r, handlers, logger)
 	} else {
-		// Работаем с БД
 		dbConn, err := database.NewDBConnection(config.DBConnectionString)
 		if err != nil {
-			logger.Error("Error connecting to database", zap.Error(err))
-		} else {
-			defer dbConn.Close()
-			dbHandler := handlers.NewDBHandler(dbConn)
-			SetDBRoutes(r, dbHandler, logger)
-
+			logger.Fatal("Error connecting to database", zap.Error(err)) // или log.Fatalf(...)
 		}
+		defer dbConn.Close()
+
+		// Прогон миграций
+		if err := dbConn.RunMigrations(); err != nil {
+			log.Fatalf("Migration error: %v", err)
+		}
+
+		// Подключение хендлеров и маршрутов
+		dbHandler := handlers.NewDBHandler(dbConn)
+		SetDBRoutes(r, dbHandler, logger)
 	}
 
 	server.logger.Info("Starting server", zap.String("address", config.Address))

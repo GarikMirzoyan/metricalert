@@ -2,9 +2,7 @@ package database
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
+	"database/sql"
 )
 
 type DBConn interface {
@@ -12,11 +10,11 @@ type DBConn interface {
 
 	Close()
 
-	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	Exec(ctx context.Context, query string, args ...any) (sql.Result, error)
 
-	QueryRow(ctx context.Context, sql string, arguments ...any) pgx.Row
+	QueryRow(ctx context.Context, query string, args ...any) *sql.Row
 
-	Query(ctx context.Context, sql string, arguments ...any) (pgx.Rows, error)
+	Query(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 
-	Begin(ctx context.Context) (pgx.Tx, error)
+	Begin(ctx context.Context) (*sql.Tx, error)
 }

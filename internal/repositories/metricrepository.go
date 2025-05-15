@@ -90,16 +90,18 @@ func (mr *MetricRepository) BatchUpdate(metrics []models.Metrics, ctx context.Co
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	// Отложенный откат, если коммит не произошёл
+	defer func() {
+		_ = tx.Rollback() // игнорируем ошибку, если уже коммитнули
+	}()
 
 	for _, m := range metrics {
-
 		switch m.MType {
 		case "gauge":
 			if m.Value == nil {
 				continue
 			}
-			_, err = tx.Exec(ctx, `
+			_, err = tx.ExecContext(ctx, `
                 INSERT INTO metrics (name, type, value)
                 VALUES ($1, 'gauge', $2)
                 ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value
@@ -109,7 +111,7 @@ func (mr *MetricRepository) BatchUpdate(metrics []models.Metrics, ctx context.Co
 			if m.Delta == nil {
 				continue
 			}
-			_, err = tx.Exec(ctx, `
+			_, err = tx.ExecContext(ctx, `
                 INSERT INTO metrics (name, type, value)
                 VALUES ($1, 'counter', $2)
                 ON CONFLICT (name) DO UPDATE SET value = metrics.value + EXCLUDED.value
@@ -123,5 +125,5 @@ func (mr *MetricRepository) BatchUpdate(metrics []models.Metrics, ctx context.Co
 		}
 	}
 
-	return tx.Commit(ctx)
+	return tx.Commit()
 }
