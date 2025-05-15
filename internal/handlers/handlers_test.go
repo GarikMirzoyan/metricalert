@@ -14,9 +14,13 @@ import (
 	"github.com/GarikMirzoyan/metricalert/internal/models"
 	"github.com/go-chi/chi"
 	"github.com/golang/mock/gomock"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 )
+
+type mockResult struct{}
+
+func (r *mockResult) LastInsertId() (int64, error) { return 0, nil }
+func (r *mockResult) RowsAffected() (int64, error) { return 1, nil }
 
 func TestUpdateHandler(t *testing.T) {
 	ms := metrics.NewMemStorage()
@@ -219,11 +223,10 @@ func TestUpdateMetricDBHandler_Success(t *testing.T) {
 
 	mockDBConn := mocks.NewMockDBConn(ctrl)
 
-	// Ожидаем вызов Exec без ошибки
 	mockDBConn.
 		EXPECT().
 		Exec(gomock.Any(), gomock.Any(), "testCounter", "counter", "10").
-		Return(pgconn.NewCommandTag("INSERT 0 1"), nil)
+		Return(&mockResult{}, nil)
 
 	handler := &DBHandler{
 		DBConn: mockDBConn,
@@ -252,7 +255,7 @@ func TestUpdateMetricDBHandler_Error(t *testing.T) {
 	mockDBConn.
 		EXPECT().
 		Exec(gomock.Any(), gomock.Any(), "testGauge", "gauge", "42.42").
-		Return(pgconn.NewCommandTag("INSERT 0 1"), fmt.Errorf("some DB error"))
+		Return(&mockResult{}, fmt.Errorf("some DB error"))
 
 	handler := &DBHandler{
 		DBConn: mockDBConn,
