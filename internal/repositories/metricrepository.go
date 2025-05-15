@@ -18,21 +18,14 @@ func NewMetricRepository(DBConn database.DBConn) *MetricRepository {
 }
 
 func (mr *MetricRepository) Update(metricType string, metricName string, metricValue string, ctx context.Context) error {
-	_, err := mr.DBConn.Exec(ctx, `
-        INSERT INTO metrics (name, type, value)
-        VALUES ($1, $2, $3::double precision)
-        ON CONFLICT (name) DO UPDATE
-        SET value = metrics.value + EXCLUDED.value
-    `, metricName, metricType, metricValue)
+	_, err := mr.DBConn.Exec(ctx, queryInsertSingleMetric, metricName, metricType, metricValue)
 
 	return err
 }
 
 func (mr *MetricRepository) GetGaugeValue(metricName string, ctx context.Context) (float64, error) {
 	var value float64
-	err := mr.DBConn.QueryRow(ctx, `
-		SELECT value FROM metrics WHERE name = $1 AND type = 'gauge'
-	`, metricName).Scan(&value)
+	err := mr.DBConn.QueryRow(ctx, querySelectGauge, metricName).Scan(&value)
 	if err != nil {
 		return 0, err
 	}
@@ -41,9 +34,7 @@ func (mr *MetricRepository) GetGaugeValue(metricName string, ctx context.Context
 
 func (mr *MetricRepository) GetCounterValue(metricName string, ctx context.Context) (int64, error) {
 	var fvalue float64
-	err := mr.DBConn.QueryRow(ctx, `
-		SELECT value FROM metrics WHERE name = $1 AND type = 'counter'
-	`, metricName).Scan(&fvalue)
+	err := mr.DBConn.QueryRow(ctx, querySelectCounter, metricName).Scan(&fvalue)
 	if err != nil {
 		return 0, err
 	}
@@ -51,9 +42,7 @@ func (mr *MetricRepository) GetCounterValue(metricName string, ctx context.Conte
 }
 
 func (mr *MetricRepository) GetAllMetrics(ctx context.Context) (map[string]float64, map[string]int64, error) {
-	rows, err := mr.DBConn.Query(ctx, `
-		SELECT name, type, value FROM metrics
-	`)
+	rows, err := mr.DBConn.Query(ctx, querySelectAllMetrics)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -90,37 +79,31 @@ func (mr *MetricRepository) BatchUpdate(metrics []models.Metrics, ctx context.Co
 	if err != nil {
 		return err
 	}
-	// Отложенный откат, если коммит не произошёл
 	defer func() {
-		_ = tx.Rollback() // игнорируем ошибку, если уже коммитнули
+		_ = tx.Rollback()
 	}()
 
 	for _, m := range metrics {
+		var value interface{}
+
 		switch m.MType {
 		case "gauge":
 			if m.Value == nil {
 				continue
 			}
-			_, err = tx.ExecContext(ctx, `
-                INSERT INTO metrics (name, type, value)
-                VALUES ($1, 'gauge', $2)
-                ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value
-            `, m.ID, *m.Value)
+			value = *m.Value
 
 		case "counter":
 			if m.Delta == nil {
 				continue
 			}
-			_, err = tx.ExecContext(ctx, `
-                INSERT INTO metrics (name, type, value)
-                VALUES ($1, 'counter', $2)
-                ON CONFLICT (name) DO UPDATE SET value = metrics.value + EXCLUDED.value
-            `, m.ID, *m.Delta)
+			value = float64(*m.Delta)
+
 		default:
 			continue
 		}
 
-		if err != nil {
+		if _, err := tx.ExecContext(ctx, queryInsertMetric, m.ID, m.MType, value); err != nil {
 			return err
 		}
 	}
