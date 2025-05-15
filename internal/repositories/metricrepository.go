@@ -49,9 +49,7 @@ func (mr *MetricRepository) GetCounterValue(metricName string, ctx context.Conte
 		fmt.Printf("Error in GetCounterValue for metric '%s': %v\n", metricName, err)
 		return 0, err
 	}
-	if err != nil {
-		return 0, err
-	}
+
 	return value, nil
 }
 
