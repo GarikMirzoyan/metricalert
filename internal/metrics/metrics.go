@@ -569,7 +569,7 @@ func GetMetricsDBFromJSON(r *http.Request, mr *repositories.MetricRepository) (m
 		ID:    request.ID,
 		MType: request.MType,
 	}
-
+	fmt.Printf("Metrics in Get: %+v\n", request)
 	// Проверка на существование метрики
 	switch MetricType(request.MType) {
 	case GaugeName:
@@ -609,7 +609,7 @@ func BatchMetricsUpdate(r *http.Request, mr *repositories.MetricRepository) erro
 	if len(metrics) == 0 {
 		return nil // Нет метрик — ничего не делаем
 	}
-
+	fmt.Printf("Metrics in Upd: %+v\n", metrics)
 	return retry.WithBackoff(func() error {
 		err := mr.BatchUpdate(metrics, r.Context())
 		if err != nil {
