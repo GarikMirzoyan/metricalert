@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/GarikMirzoyan/metricalert/internal/database"
 	"github.com/GarikMirzoyan/metricalert/internal/models"
@@ -41,16 +40,14 @@ func (mr *MetricRepository) GetGaugeValue(metricName string, ctx context.Context
 }
 
 func (mr *MetricRepository) GetCounterValue(metricName string, ctx context.Context) (int64, error) {
-	var value int64
+	var fvalue float64
 	err := mr.DBConn.QueryRow(ctx, `
 		SELECT value FROM metrics WHERE name = $1 AND type = 'counter'
-	`, metricName).Scan(&value)
+	`, metricName).Scan(&fvalue)
 	if err != nil {
-		fmt.Printf("Error in GetCounterValue for metric '%s': %v\n", metricName, err)
 		return 0, err
 	}
-
-	return value, nil
+	return int64(fvalue), nil
 }
 
 func (mr *MetricRepository) GetAllMetrics(ctx context.Context) (map[string]float64, map[string]int64, error) {
