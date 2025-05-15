@@ -31,10 +31,15 @@ func NewDBConnection(connString string) (*DB, error) {
 	return &DB{Conn: conn}, nil
 }
 
-// Прогон миграций через goose
 func (db *DB) RunMigrations() error {
-	rootDir, _ := os.Getwd()
-	migrationsPath := filepath.Join(rootDir, "../../migrations")
+	goose.SetDialect("postgres")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	migrationsPath := filepath.Join(wd, "../../migrations")
 	return goose.Up(db.Conn, migrationsPath)
 }
 
