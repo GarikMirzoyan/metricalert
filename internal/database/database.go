@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"path/filepath"
+	"runtime"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -31,15 +31,14 @@ func NewDBConnection(connString string) (*DB, error) {
 	return &DB{Conn: conn}, nil
 }
 
+func getProjectRoot() string {
+	_, filename, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(filename), "../../")
+}
+
 func (db *DB) RunMigrations() error {
 	goose.SetDialect("postgres")
-
-	wd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	migrationsPath := filepath.Join(wd, "../../migrations")
+	migrationsPath := filepath.Join(getProjectRoot(), "migrations")
 	return goose.Up(db.Conn, migrationsPath)
 }
 
