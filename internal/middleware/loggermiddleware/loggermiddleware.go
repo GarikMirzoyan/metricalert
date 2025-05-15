@@ -1,9 +1,6 @@
 package loggermiddleware
 
 import (
-	"bytes"
-	"compress/gzip"
-	"io"
 	"net/http"
 	"time"
 
@@ -32,44 +29,16 @@ func Logger(next http.Handler, logger *zap.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
-		var bodyBytes []byte
-		if r.Body != nil {
-			contentEncoding := r.Header.Get("Content-Encoding")
-			switch contentEncoding {
-			case "gzip":
-				gzipReader, err := gzip.NewReader(r.Body)
-				if err != nil {
-					logger.Warn("could not create gzip reader", zap.Error(err))
-				} else {
-					defer gzipReader.Close()
-					bodyBytes, err = io.ReadAll(gzipReader)
-					if err != nil {
-						logger.Warn("could not read gzipped request body", zap.Error(err))
-					}
-				}
-			default:
-				b, err := io.ReadAll(r.Body)
-				if err != nil {
-					logger.Warn("could not read request body", zap.Error(err))
-				} else {
-					bodyBytes = b
-				}
-			}
-		}
-
-		// Восстанавливаем тело запроса для обработки хендлером
-		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-
-		// Обернутый ResponseWriter
+		// Подготовим кастомный ResponseWriter для получения информации о статусе и размере ответа
 		ww := &statusWriter{ResponseWriter: w}
 		next.ServeHTTP(ww, r)
 
 		duration := time.Since(start)
 
+		// Логируем информацию о запросе и ответе
 		logger.Info("Handled request",
 			zap.String("method", r.Method),
 			zap.String("uri", r.RequestURI),
-			zap.String("body", string(bodyBytes)),
 			zap.Duration("duration", duration),
 			zap.Int("status", ww.status),
 			zap.Int64("response_size", ww.size),
