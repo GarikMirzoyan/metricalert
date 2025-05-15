@@ -34,27 +34,33 @@ func Logger(next http.Handler, logger *zap.Logger) http.Handler {
 
 		var bodyBytes []byte
 		if r.Body != nil {
-			var err error
-			if r.Header.Get("Content-Encoding") == "gzip" {
+			contentEncoding := r.Header.Get("Content-Encoding")
+			switch contentEncoding {
+			case "gzip":
 				gzipReader, err := gzip.NewReader(r.Body)
 				if err != nil {
 					logger.Warn("could not create gzip reader", zap.Error(err))
 				} else {
+					defer gzipReader.Close()
 					bodyBytes, err = io.ReadAll(gzipReader)
-					_ = gzipReader.Close()
+					if err != nil {
+						logger.Warn("could not read gzipped request body", zap.Error(err))
+					}
 				}
-			} else {
-				bodyBytes, err = io.ReadAll(r.Body)
-			}
-			if err != nil {
-				logger.Warn("could not read request body", zap.Error(err))
+			default:
+				b, err := io.ReadAll(r.Body)
+				if err != nil {
+					logger.Warn("could not read request body", zap.Error(err))
+				} else {
+					bodyBytes = b
+				}
 			}
 		}
 
-		// Восстановить тело запроса
+		// Восстанавливаем тело запроса для обработки хендлером
 		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-		// Обернуть writer
+		// Обернутый ResponseWriter
 		ww := &statusWriter{ResponseWriter: w}
 		next.ServeHTTP(ww, r)
 
