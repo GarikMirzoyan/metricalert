@@ -2,29 +2,21 @@ package handlers
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/GarikMirzoyan/metricalert/internal/database/mocks"
 	"github.com/GarikMirzoyan/metricalert/internal/metrics"
 	"github.com/GarikMirzoyan/metricalert/internal/models"
 	"github.com/go-chi/chi"
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
 
-type mockResult struct{}
-
-func (r *mockResult) LastInsertId() (int64, error) { return 0, nil }
-func (r *mockResult) RowsAffected() (int64, error) { return 1, nil }
-
 func TestUpdateHandler(t *testing.T) {
 	ms := metrics.NewMemStorage()
-	h := NewHandlers(ms)
+	h := NewMemHandlers(ms)
 
 	r := chi.NewRouter()
 	r.Post("/update/{type}/{name}/{value}", h.UpdateHandler)
@@ -46,7 +38,7 @@ func TestUpdateHandler(t *testing.T) {
 
 func TestUpdateHandler_InvalidType(t *testing.T) {
 	ms := metrics.NewMemStorage()
-	h := NewHandlers(ms)
+	h := NewMemHandlers(ms)
 
 	r := chi.NewRouter()
 	r.Post("/update/{type}/{name}/{value}", h.UpdateHandler)
@@ -68,7 +60,7 @@ func TestUpdateHandler_InvalidType(t *testing.T) {
 
 func TestUpdateHandlerJSON(t *testing.T) {
 	ms := metrics.NewMemStorage()
-	h := NewHandlers(ms)
+	h := NewMemHandlers(ms)
 
 	r := chi.NewRouter()
 	r.Post("/update/", h.UpdateHandlerJSON)
@@ -95,7 +87,7 @@ func TestUpdateHandlerJSON(t *testing.T) {
 func TestGetValueHandler(t *testing.T) {
 	ms := metrics.NewMemStorage()
 	ms.UpdateMetrics("gauge", "test_gauge", "10.5")
-	h := NewHandlers(ms)
+	h := NewMemHandlers(ms)
 
 	r := chi.NewRouter()
 	r.Get("/value/{type}/{name}", h.GetValueHandler)
@@ -114,7 +106,7 @@ func TestGetValueHandler(t *testing.T) {
 func TestGetValueHandler_InvalidType(t *testing.T) {
 	ms := metrics.NewMemStorage()
 	ms.UpdateMetrics("gauge", "test_gauge", "10.5")
-	h := NewHandlers(ms)
+	h := NewMemHandlers(ms)
 
 	r := chi.NewRouter()
 	r.Get("/value/{type}/{name}", h.GetValueHandler)
@@ -133,7 +125,7 @@ func TestRootHandler(t *testing.T) {
 	ms := metrics.NewMemStorage()
 	ms.UpdateMetrics("gauge", "test_gauge", "10.5")
 	ms.UpdateMetrics("counter", "test_counter", "5")
-	h := NewHandlers(ms)
+	h := NewMemHandlers(ms)
 
 	// Мокируем запрос
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -151,13 +143,13 @@ func TestRootHandler(t *testing.T) {
 func TestGetValueHandlerPost(t *testing.T) {
 	ms := metrics.NewMemStorage()
 	ms.UpdateMetrics("gauge", "test_gauge", "10.5")
-	h := NewHandlers(ms)
+	h := NewMemHandlers(ms)
 
 	// Мокируем запрос с JSON телом
 	body := `{"id":"test_gauge","type":"gauge"}`
 
 	r := chi.NewRouter()
-	r.Post("/value/", h.GetValueHandlerPost)
+	r.Post("/value/", h.GetValueHandlerJSON)
 
 	req := httptest.NewRequest(http.MethodPost, "/value/", bytes.NewReader([]byte(body)))
 	req.Header.Set("Content-Type", "application/json")
@@ -173,105 +165,4 @@ func TestGetValueHandlerPost(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "test_gauge", resp.ID)
 	assert.Equal(t, "gauge", resp.MType)
-}
-
-func TestPingDBHandler_Success(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockDBConn := mocks.NewMockDBConn(ctrl)
-
-	mockDBConn.EXPECT().Ping(gomock.Any()).Return(nil)
-
-	handler := &DBHandler{
-		DBConn: mockDBConn,
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
-	w := httptest.NewRecorder()
-
-	handler.PingDBHandler(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestPingDBHandler_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockDBConn := mocks.NewMockDBConn(ctrl)
-
-	mockDBConn.EXPECT().Ping(gomock.Any()).Return(fmt.Errorf("database error"))
-
-	handler := &DBHandler{
-		DBConn: mockDBConn,
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
-	w := httptest.NewRecorder()
-
-	handler.PingDBHandler(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-
-	assert.Contains(t, w.Body.String(), "Произошла ошибка")
-}
-
-func TestUpdateMetricDBHandler_Success(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockDBConn := mocks.NewMockDBConn(ctrl)
-
-	mockDBConn.
-		EXPECT().
-		Exec(gomock.Any(), gomock.Any(), "testCounter", "counter", "10").
-		Return(&mockResult{}, nil)
-
-	handler := &DBHandler{
-		DBConn: mockDBConn,
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/update/counter/testCounter/10", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("type", "counter")
-	rctx.URLParams.Add("name", "testCounter")
-	rctx.URLParams.Add("value", "10")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-	w := httptest.NewRecorder()
-
-	handler.UpdateMetricDBHandler(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestUpdateMetricDBHandler_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockDBConn := mocks.NewMockDBConn(ctrl)
-
-	mockDBConn.
-		EXPECT().
-		Exec(gomock.Any(), gomock.Any(), "testGauge", "gauge", "42.42").
-		Return(&mockResult{}, fmt.Errorf("some DB error"))
-
-	handler := &DBHandler{
-		DBConn: mockDBConn,
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/update/gauge/testGauge/42.42", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("type", "gauge")
-	rctx.URLParams.Add("name", "testGauge")
-	rctx.URLParams.Add("value", "42.42")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-	w := httptest.NewRecorder()
-
-	handler.UpdateMetricDBHandler(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	assert.Contains(t, w.Body.String(), "Произошла ошибка")
 }

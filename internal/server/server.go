@@ -48,10 +48,11 @@ func Run() {
 	// Запускаем сохранение метрик
 	go storage.StartMetricSaving(server.config, server.logger)
 
+	SetMiddlewares(r, logger)
 	if config.DBConnectionString == "" {
 		// Работаем с in-memory storage
-		handlers := handlers.NewHandlers(storage)
-		SetMSRoutes(r, handlers, logger)
+		handlers := handlers.NewMemHandlers(storage)
+		SetMetricRoutes(r, handlers)
 	} else {
 		dbConn, err := database.NewDBConnection(config.DBConnectionString)
 		if err != nil {
@@ -64,9 +65,11 @@ func Run() {
 			log.Fatalf("Migration error: %v", err)
 		}
 
+		dbBaseHandlers := handlers.NewDBBaseHandlers(dbConn)
 		// Подключение хендлеров и маршрутов
-		dbHandler := handlers.NewDBHandler(dbConn)
-		SetDBRoutes(r, dbHandler, logger)
+		handlers := handlers.NewDBHandlers(dbConn)
+		SetMetricRoutes(r, handlers)
+		SetDBRoutes(r, dbBaseHandlers)
 	}
 
 	server.logger.Info("Starting server", zap.String("address", config.Address))
@@ -79,37 +82,24 @@ func Run() {
 	}
 }
 
-func SetMSRoutes(r *chi.Mux, handlers *handlers.Handlers, logger *zap.Logger) {
+func SetMiddlewares(r *chi.Mux, logger *zap.Logger) {
 	// Добавляем middleware для логирования и сжатия
 	r.Use(func(next http.Handler) http.Handler {
 		return loggermiddleware.Logger(next, logger)
 	})
 	r.Use(gzipmiddleware.GzipDecompression) // Разжатие входящих данных
 	r.Use(gzipmiddleware.GzipCompression)   // Сжатие исходящих данных
+}
 
-	// Обработчики маршрутов
+func SetMetricRoutes(r *chi.Mux, handlers handlers.MetricsHandlers) {
 	r.Post("/update/{type}/{name}/{value}", handlers.UpdateHandler)
 	r.Post("/update/", handlers.UpdateHandlerJSON)
 	r.Post("/updates/", handlers.BatchMetricsUpdateHandler)
-	r.Post("/value/", handlers.GetValueHandlerPost)
 	r.Get("/value/{type}/{name}", handlers.GetValueHandler)
+	r.Post("/value/", handlers.GetValueHandlerJSON)
 	r.Get("/", handlers.RootHandler)
-
 }
 
-func SetDBRoutes(r *chi.Mux, DBHandler *handlers.DBHandler, logger *zap.Logger) {
-	// Добавляем middleware для логирования и сжатия
-	r.Use(func(next http.Handler) http.Handler {
-		return loggermiddleware.Logger(next, logger)
-	})
-	r.Use(gzipmiddleware.GzipDecompression) // Разжатие входящих данных
-	r.Use(gzipmiddleware.GzipCompression)   // Сжатие исходящих данных
-
-	r.Post("/update/{type}/{name}/{value}", DBHandler.UpdateMetricDBHandler)
-	r.Post("/update/", DBHandler.UpdateMetricDBHandlerJSON)
-	r.Post("/updates/", DBHandler.BatchMetricsUpdateDBHandler)
-	r.Get("/value/{type}/{name}", DBHandler.GetMetricValueDBHandler)
-	r.Post("/value/", DBHandler.GetValueDBHandlerPost)
-	r.Get("/", DBHandler.RootDBHandler)
-	r.Get("/ping", DBHandler.PingDBHandler)
+func SetDBRoutes(r *chi.Mux, handlers *handlers.DBBaseHandler) {
+	r.Get("/ping", handlers.PingDBHandler)
 }
