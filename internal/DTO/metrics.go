@@ -1,4 +1,4 @@
-package models
+package DTO
 
 type Metrics struct {
 	ID    string   `json:"id"`              // имя метрики

@@ -13,11 +13,11 @@ func InitTemplate() *template.Template {
 	<body>
 		<h1>Metrics</h1>
 		<ul>
-			{{range $key, $value := .Gauges}}
-				<li>{{$key}}: {{$value}}</li>
+			{{range $key, $metric := .Gauges}}
+				<li>{{$key}}: {{$metric.Value}}</li>
 			{{end}}
-			{{range $key, $value := .Counters}}
-				<li>{{$key}}: {{$value}}</li>
+			{{range $key, $metric := .Counters}}
+				<li>{{$key}}: {{$metric.Value}}</li>
 			{{end}}
 		</ul>
 	</body>

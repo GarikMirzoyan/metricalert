@@ -3,9 +3,9 @@ package agent
 import (
 	"time"
 
+	"github.com/GarikMirzoyan/metricalert/internal/DTO"
 	"github.com/GarikMirzoyan/metricalert/internal/agent/config"
 	"github.com/GarikMirzoyan/metricalert/internal/metrics"
-	"github.com/GarikMirzoyan/metricalert/internal/models"
 )
 
 type Agent struct {
@@ -43,14 +43,14 @@ func (a *Agent) startReporting() {
 	}
 }
 
-func (a *Agent) prepareMetricsBatch() []models.Metrics {
-	var batch []models.Metrics
+func (a *Agent) prepareMetricsBatch() []DTO.Metrics {
+	var batch []DTO.Metrics
 
 	// Собираем gauge метрики
 	collected := metrics.CollectMetrics()
 	for name, value := range collected {
 		val := float64(value)
-		batch = append(batch, models.Metrics{
+		batch = append(batch, DTO.Metrics{
 			ID:    name,
 			MType: "gauge",
 			Value: &val,
@@ -59,7 +59,7 @@ func (a *Agent) prepareMetricsBatch() []models.Metrics {
 
 	// Добавляем PollCount как counter
 	delta := int64(a.pollCount)
-	batch = append(batch, models.Metrics{
+	batch = append(batch, DTO.Metrics{
 		ID:    "PollCount",
 		MType: "counter",
 		Delta: &delta,

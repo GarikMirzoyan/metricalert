@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 
+	"github.com/GarikMirzoyan/metricalert/internal/constants"
 	"github.com/GarikMirzoyan/metricalert/internal/database"
 	"github.com/GarikMirzoyan/metricalert/internal/models"
 )
@@ -17,8 +18,8 @@ func NewMetricRepository(DBConn database.DBConn) *MetricRepository {
 	return MetricRepository
 }
 
-func (mr *MetricRepository) Update(metricType string, metricName string, metricValue string, ctx context.Context) error {
-	_, err := mr.DBConn.Exec(ctx, queryInsertSingleMetric, metricName, metricType, metricValue)
+func (mr *MetricRepository) Update(metric models.Metric, ctx context.Context) error {
+	_, err := mr.DBConn.Exec(ctx, queryInsertSingleMetric, metric.GetName(), metric.GetType(), metric.GetValue())
 
 	return err
 }
@@ -41,18 +42,19 @@ func (mr *MetricRepository) GetCounterValue(metricName string, ctx context.Conte
 	return int64(fvalue), nil
 }
 
-func (mr *MetricRepository) GetAllMetrics(ctx context.Context) (map[string]float64, map[string]int64, error) {
+func (mr *MetricRepository) GetAllMetrics(ctx context.Context) (map[string]models.GaugeMetric, map[string]models.CounterMetric, error) {
 	rows, err := mr.DBConn.Query(ctx, querySelectAllMetrics)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer rows.Close()
 
-	gauges := make(map[string]float64)
-	counters := make(map[string]int64)
+	gauges := make(map[string]models.GaugeMetric)
+	counters := make(map[string]models.CounterMetric)
 
 	for rows.Next() {
-		var name, metricType string
+		var name string
+		var metricType constants.MetricType
 		var value float64
 
 		if err := rows.Scan(&name, &metricType, &value); err != nil {
@@ -60,10 +62,18 @@ func (mr *MetricRepository) GetAllMetrics(ctx context.Context) (map[string]float
 		}
 
 		switch metricType {
-		case "gauge":
-			gauges[name] = value
-		case "counter":
-			counters[name] = int64(value)
+		case constants.GaugeName:
+			gauges[name] = models.GaugeMetric{
+				Name:  name,
+				Type:  constants.GaugeName,
+				Value: value,
+			}
+		case constants.CounterName:
+			counters[name] = models.CounterMetric{
+				Name:  name,
+				Type:  constants.CounterName,
+				Value: int64(value),
+			}
 		}
 	}
 
@@ -74,7 +84,7 @@ func (mr *MetricRepository) GetAllMetrics(ctx context.Context) (map[string]float
 	return gauges, counters, nil
 }
 
-func (mr *MetricRepository) BatchUpdate(metrics []models.Metrics, ctx context.Context) error {
+func (mr *MetricRepository) BatchUpdate(metrics []models.Metric, ctx context.Context) error {
 	tx, err := mr.DBConn.Begin(ctx)
 	if err != nil {
 		return err
@@ -84,26 +94,36 @@ func (mr *MetricRepository) BatchUpdate(metrics []models.Metrics, ctx context.Co
 	}()
 
 	for _, m := range metrics {
-		var value interface{}
+		name := m.GetName()
+		typ := m.GetType()
+		val := m.GetValue()
 
-		switch m.MType {
-		case "gauge":
-			if m.Value == nil {
+		if val == nil {
+			continue
+		}
+
+		var value float64
+
+		switch typ {
+		case constants.GaugeName:
+			v, ok := val.(*float64)
+			if !ok {
 				continue
 			}
-			value = *m.Value
+			value = *v
 
-		case "counter":
-			if m.Delta == nil {
+		case constants.CounterName:
+			v, ok := val.(*int64)
+			if !ok {
 				continue
 			}
-			value = float64(*m.Delta)
+			value = float64(*v)
 
 		default:
 			continue
 		}
 
-		if _, err := tx.ExecContext(ctx, queryInsertMetric, m.ID, m.MType, value); err != nil {
+		if _, err := tx.ExecContext(ctx, queryInsertMetric, name, typ, value); err != nil {
 			return err
 		}
 	}

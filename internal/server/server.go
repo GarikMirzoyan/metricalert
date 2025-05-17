@@ -1,7 +1,6 @@
 package server
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/GarikMirzoyan/metricalert/internal/database"
@@ -9,18 +8,19 @@ import (
 	"github.com/GarikMirzoyan/metricalert/internal/metrics"
 	"github.com/GarikMirzoyan/metricalert/internal/middleware/gzipmiddleware"
 	"github.com/GarikMirzoyan/metricalert/internal/middleware/loggermiddleware"
+	"github.com/GarikMirzoyan/metricalert/internal/repositories"
 	"github.com/GarikMirzoyan/metricalert/internal/server/config"
 	"github.com/go-chi/chi"
 	"go.uber.org/zap"
 )
 
 type Server struct {
-	storage *metrics.MemStorage
+	storage metrics.MetricStorage
 	config  config.Config
 	logger  *zap.Logger
 }
 
-func NewServer(storage *metrics.MemStorage, logger *zap.Logger, config config.Config) *Server {
+func NewServer(storage metrics.MetricStorage, logger *zap.Logger, config config.Config) *Server {
 	server := &Server{
 		storage: storage,
 		logger:  logger,
@@ -30,55 +30,68 @@ func NewServer(storage *metrics.MemStorage, logger *zap.Logger, config config.Co
 }
 
 func Run() {
-	// Настройка логирования с использованием zap
+	r := chi.NewRouter()
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
-	config := config.InitConfig()
-	storage := metrics.NewMemStorage()
-
-	server := NewServer(storage, logger, config)
-
-	r := chi.NewRouter()
-
-	// Загружаем метрики, если указано
-	if err := storage.LoadMetricsFromFile(server.config); err != nil {
-		logger.Error("Error loading metrics", zap.Error(err))
-	}
-
-	// Запускаем сохранение метрик
-	go storage.StartMetricSaving(server.config, server.logger)
 
 	SetMiddlewares(r, logger)
+
+	config := config.InitConfig()
+
+	var storage metrics.MetricStorage
+
 	if config.DBConnectionString == "" {
-		// Работаем с in-memory storage
-		handlers := handlers.NewMemHandlers(storage)
-		SetMetricRoutes(r, handlers)
+		// In-memory storage
+		memStorage := metrics.NewMemStorage()
+
+		if err := memStorage.LoadMetricsFromFile(config); err != nil {
+			logger.Error("Error loading metrics", zap.Error(err))
+		}
+
+		go memStorage.StartMetricSaving(config, logger)
+
+		if err := memStorage.SaveMetricsToFile(config); err != nil {
+			logger.Error("Error saving metrics on shutdown", zap.Error(err))
+		}
+
+		storage = memStorage
 	} else {
+		// Подключение к базе
 		dbConn, err := database.NewDBConnection(config.DBConnectionString)
 		if err != nil {
-			logger.Fatal("Error connecting to database", zap.Error(err)) // или log.Fatalf(...)
+			logger.Fatal("Error connecting to database", zap.Error(err))
 		}
 		defer dbConn.Close()
 
-		// Прогон миграций
 		if err := dbConn.RunMigrations(); err != nil {
-			log.Fatalf("Migration error: %v", err)
+			logger.Fatal("Migration error", zap.Error(err))
 		}
 
+		repo := repositories.NewMetricRepository(dbConn)
+		dbStorage := metrics.NewDBStorage(repo)
+		storage = dbStorage
+
 		dbBaseHandlers := handlers.NewDBBaseHandlers(dbConn)
-		// Подключение хендлеров и маршрутов
-		handlers := handlers.NewDBHandlers(dbConn)
-		SetMetricRoutes(r, handlers)
 		SetDBRoutes(r, dbBaseHandlers)
 	}
+
+	server := NewServer(storage, logger, config)
+
+	handlers := handlers.NewHandlers(storage)
+
+	SetMetricRoutes(r, handlers)
+
+	// // Загружаем метрики, если указано
+	// if err := storage.LoadMetricsFromFile(server.config); err != nil {
+	// 	logger.Error("Error loading metrics", zap.Error(err))
+	// }
+
+	// // Запускаем сохранение метрик
+	// go storage.StartMetricSaving(server.config, server.logger)
 
 	server.logger.Info("Starting server", zap.String("address", config.Address))
 	if err := http.ListenAndServe(config.Address, r); err != nil {
 		server.logger.Error("Error starting server", zap.Error(err))
-	}
-
-	if err := storage.SaveMetricsToFile(config); err != nil {
-		server.logger.Error("Error saving metrics on shutdown", zap.Error(err))
 	}
 }
 
@@ -91,7 +104,7 @@ func SetMiddlewares(r *chi.Mux, logger *zap.Logger) {
 	r.Use(gzipmiddleware.GzipCompression)   // Сжатие исходящих данных
 }
 
-func SetMetricRoutes(r *chi.Mux, handlers handlers.MetricsHandlers) {
+func SetMetricRoutes(r *chi.Mux, handlers *handlers.Handler) {
 	r.Post("/update/{type}/{name}/{value}", handlers.UpdateHandler)
 	r.Post("/update/", handlers.UpdateHandlerJSON)
 	r.Post("/updates/", handlers.BatchMetricsUpdateHandler)
