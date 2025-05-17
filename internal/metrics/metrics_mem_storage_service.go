@@ -178,7 +178,7 @@ func (ms *MemStorage) UpdateCounter(metric *models.CounterMetric, ctx context.Co
 func (ms *MemStorage) GetGauge(name string, ctx context.Context) (models.GaugeMetric, error) {
 	metric, exists := ms.gauges[name]
 	if !exists {
-		return models.GaugeMetric{}, fmt.Errorf("gauge metric %q not found", name)
+		return models.GaugeMetric{}, ErrMetricNotFound
 	}
 	return metric, nil
 }
@@ -186,7 +186,7 @@ func (ms *MemStorage) GetGauge(name string, ctx context.Context) (models.GaugeMe
 func (ms *MemStorage) GetCounter(name string, ctx context.Context) (models.CounterMetric, error) {
 	metric, exists := ms.counters[name]
 	if !exists {
-		return models.CounterMetric{}, fmt.Errorf("counter metric %q not found", name)
+		return models.CounterMetric{}, ErrMetricNotFound
 	}
 	return metric, nil
 }
