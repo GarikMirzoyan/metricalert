@@ -153,15 +153,19 @@ func (ms *DBStorage) UpdateCounter(metric *models.CounterMetric, ctx context.Con
 		return fmt.Errorf("counter metric name is empty")
 	}
 
+	err := ms.metricRepository.Update(metric, ctx)
+	if err != nil {
+		return err
+	}
+
 	currentValue, err := ms.metricRepository.GetCounterValue(metric.Name, ctx)
 	if err != nil && !errors.Is(err, ErrMetricNotFound) {
 		return err
 	}
 
-	newValue := currentValue + metric.Value
-	metric.Value = newValue
+	metric.Value = currentValue
 
-	return ms.metricRepository.Update(metric, ctx)
+	return nil
 }
 
 func (ms *DBStorage) GetGauge(name string, ctx context.Context) (models.GaugeMetric, error) {
