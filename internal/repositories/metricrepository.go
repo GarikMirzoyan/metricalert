@@ -106,18 +106,18 @@ func (mr *MetricRepository) BatchUpdate(metrics []models.Metric, ctx context.Con
 
 		switch typ {
 		case constants.GaugeName:
-			v, ok := val.(*float64)
+			v, ok := val.(float64)
 			if !ok {
 				continue
 			}
-			value = *v
+			value = v
 
 		case constants.CounterName:
-			v, ok := val.(*int64)
+			v, ok := val.(int64)
 			if !ok {
 				continue
 			}
-			value = float64(*v)
+			value = float64(v)
 
 		default:
 			continue

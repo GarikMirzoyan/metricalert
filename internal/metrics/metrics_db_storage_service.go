@@ -206,6 +206,10 @@ func (ms *DBStorage) GetAll(ctx context.Context) (map[string]models.GaugeMetric,
 func (ms *DBStorage) UpdateBatchJSON(metrics []models.Metric, ctx context.Context) (map[string]dto.Metrics, error) {
 	responses := make(map[string]dto.Metrics)
 
+	if err := ms.metricRepository.BatchUpdate(metrics, ctx); err != nil {
+		return nil, err
+	}
+
 	for _, metric := range metrics {
 		id := metric.GetName()
 		if id == "" {
@@ -219,17 +223,9 @@ func (ms *DBStorage) UpdateBatchJSON(metrics []models.Metric, ctx context.Contex
 
 		switch m := metric.(type) {
 		case *models.GaugeMetric:
-			if err := ms.UpdateGauge(m, ctx); err != nil {
-				return nil, err
-			}
 			response.Value = &m.Value
-
 		case *models.CounterMetric:
-			if err := ms.UpdateCounter(m, ctx); err != nil {
-				return nil, err
-			}
 			response.Delta = &m.Value
-
 		default:
 			return nil, ErrInvalidMetricType
 		}
