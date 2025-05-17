@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	dto "github.com/GarikMirzoyan/metricalert/internal/DTO"
@@ -151,6 +152,15 @@ func (ms *DBStorage) UpdateCounter(metric *models.CounterMetric, ctx context.Con
 	if metric.Name == "" {
 		return fmt.Errorf("counter metric name is empty")
 	}
+
+	currentValue, err := ms.metricRepository.GetCounterValue(metric.Name, ctx)
+	if err != nil && !errors.Is(err, ErrMetricNotFound) {
+		return err
+	}
+
+	newValue := currentValue + metric.Value
+	metric.Value = newValue
+
 	return ms.metricRepository.Update(metric, ctx)
 }
 
