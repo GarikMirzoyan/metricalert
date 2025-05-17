@@ -206,18 +206,18 @@ func (h *Handler) BatchMetricsUpdateHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Преобразуем DTO в map[string]models.Metric
-	metricsMap := make(map[string]models.Metric)
+	var metricsList []models.Metric
 	for _, dto := range metricsDTO {
 		metric, err := metrics.NewMetricFromDTO(dto)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Invalid metric: %v", err), http.StatusBadRequest)
 			return
 		}
-		metricsMap[dto.ID] = metric
+		metricsList = append(metricsList, metric)
 	}
 
 	// Обновляем метрики
-	response, err := h.ms.UpdateBatchJSON(metricsMap, r.Context())
+	response, err := h.ms.UpdateBatchJSON(metricsList, r.Context())
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return

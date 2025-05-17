@@ -12,7 +12,7 @@ type MetricStorage interface {
 	UpdateGauge(metric *models.GaugeMetric, ctx context.Context) error
 	UpdateCounter(metric *models.CounterMetric, ctx context.Context) error
 	UpdateJSON(metric models.Metric, ctx context.Context) (dto.Metrics, error)
-	UpdateBatchJSON(metrics map[string]models.Metric, ctx context.Context) (map[string]dto.Metrics, error)
+	UpdateBatchJSON(metrics []models.Metric, ctx context.Context) (map[string]dto.Metrics, error)
 
 	GetValue(metricType, name string, ctx context.Context) (string, error)
 	GetGauge(name string, ctx context.Context) (models.GaugeMetric, error)

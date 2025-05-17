@@ -209,16 +209,17 @@ func (ms *MemStorage) GetAll(ctx context.Context) (map[string]models.GaugeMetric
 	return gauges, counters, nil
 }
 
-func (ms *MemStorage) UpdateBatchJSON(metrics map[string]models.Metric, ctx context.Context) (map[string]dto.Metrics, error) {
+func (ms *MemStorage) UpdateBatchJSON(metrics []models.Metric, ctx context.Context) (map[string]dto.Metrics, error) {
 	responses := make(map[string]dto.Metrics)
 
-	for key, metric := range metrics {
-		if key == "" {
+	for _, metric := range metrics {
+		id := metric.GetName()
+		if id == "" {
 			return nil, ErrInvalidMetricID
 		}
 
 		response := dto.Metrics{
-			ID:    key,
+			ID:    id,
 			MType: string(metric.GetType()),
 		}
 
@@ -233,7 +234,7 @@ func (ms *MemStorage) UpdateBatchJSON(metrics map[string]models.Metric, ctx cont
 			return nil, ErrInvalidMetricType
 		}
 
-		responses[key] = response
+		responses[id] = response
 	}
 
 	return responses, nil
