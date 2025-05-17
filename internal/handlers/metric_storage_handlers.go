@@ -153,10 +153,10 @@ func (h *Handler) GetValueHandlerJSON(w http.ResponseWriter, r *http.Request) {
 
 	response, err := h.ms.GetJSON(metric, r.Context())
 	if err != nil {
-		switch err {
-		case metrics.ErrMetricNotFound:
+		switch {
+		case errors.Is(err, metrics.ErrMetricNotFound):
 			http.Error(w, "Metric not found", http.StatusNotFound)
-		case metrics.ErrInvalidMetricType:
+		case errors.Is(err, metrics.ErrInvalidMetricType):
 			http.Error(w, "Invalid metric type", http.StatusBadRequest)
 		default:
 			http.Error(w, fmt.Sprintf("Internal server error: %v", err), http.StatusInternalServerError)
