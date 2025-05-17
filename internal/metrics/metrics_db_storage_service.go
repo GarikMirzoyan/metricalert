@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/GarikMirzoyan/metricalert/internal/DTO"
+	dto "github.com/GarikMirzoyan/metricalert/internal/DTO"
 	"github.com/GarikMirzoyan/metricalert/internal/constants"
 	"github.com/GarikMirzoyan/metricalert/internal/models"
 	"github.com/GarikMirzoyan/metricalert/internal/repositories"
@@ -31,14 +31,14 @@ func (ms *DBStorage) Update(metric models.Metric, ctx context.Context) error {
 	}
 }
 
-func (h *DBStorage) UpdateJSON(metric models.Metric, ctx context.Context) (DTO.Metrics, error) {
+func (ms *DBStorage) UpdateJSON(metric models.Metric, ctx context.Context) (dto.Metrics, error) {
 	// Проверка на nil значение
 	if metric.GetValue() == nil {
-		return DTO.Metrics{}, ErrInvalidMetricDelta
+		return dto.Metrics{}, ErrInvalidMetricDelta
 	}
 
 	// Создание ответа
-	response := DTO.Metrics{
+	response := dto.Metrics{
 		ID:    metric.GetName(),
 		MType: string(metric.GetType()),
 	}
@@ -47,12 +47,12 @@ func (h *DBStorage) UpdateJSON(metric models.Metric, ctx context.Context) (DTO.M
 	case models.GaugeMetric:
 		value, ok := metric.GetValue().(*float64)
 		if !ok {
-			return DTO.Metrics{}, fmt.Errorf("invalid type assertion: expected *float64")
+			return dto.Metrics{}, fmt.Errorf("invalid type assertion: expected *float64")
 		}
 
-		err := h.metricRepository.Update(m, ctx)
+		err := ms.metricRepository.Update(m, ctx)
 		if err != nil {
-			return DTO.Metrics{}, err
+			return dto.Metrics{}, err
 		}
 
 		response.Value = value
@@ -60,18 +60,18 @@ func (h *DBStorage) UpdateJSON(metric models.Metric, ctx context.Context) (DTO.M
 	case models.CounterMetric:
 		delta, ok := metric.GetValue().(*int64)
 		if !ok {
-			return DTO.Metrics{}, fmt.Errorf("invalid type assertion: expected *int64")
+			return dto.Metrics{}, fmt.Errorf("invalid type assertion: expected *int64")
 		}
 
-		err := h.metricRepository.Update(m, ctx)
+		err := ms.metricRepository.Update(m, ctx)
 		if err != nil {
-			return DTO.Metrics{}, err
+			return dto.Metrics{}, err
 		}
 
 		response.Delta = delta
 
 	default:
-		return DTO.Metrics{}, ErrInvalidMetricType
+		return dto.Metrics{}, ErrInvalidMetricType
 	}
 
 	return response, nil
@@ -81,29 +81,26 @@ func (ms *DBStorage) GetValue(metricType, metricName string, ctx context.Context
 	switch constants.MetricType(metricType) {
 	case constants.GaugeName:
 		value, err := ms.metricRepository.GetGaugeValue(metricName, ctx)
-
 		if err != nil {
-			fmt.Errorf(fmt.Sprintf("Произошла ошибка: %v", err))
+			return "", fmt.Errorf("произошла ошибка при получении Gauge: %w", err)
 		}
-
 		return fmt.Sprintf("%v", value), nil
 
 	case constants.CounterName:
 		value, err := ms.metricRepository.GetCounterValue(metricName, ctx)
-
 		if err != nil {
-			fmt.Errorf(fmt.Sprintf("Произошла ошибка: %v", err))
+			return "", fmt.Errorf("произошла ошибка при получении Counter: %w", err)
 		}
-
 		return fmt.Sprintf("%v", value), nil
+
 	default:
 		return "", ErrInvalidMetricType
 	}
 }
 
-func (ms *DBStorage) GetJSON(metric models.Metric, ctx context.Context) (DTO.Metrics, error) {
+func (ms *DBStorage) GetJSON(metric models.Metric, ctx context.Context) (dto.Metrics, error) {
 	// Создание ответа
-	response := DTO.Metrics{
+	response := dto.Metrics{
 		ID:    metric.GetName(),
 		MType: string(metric.GetType()),
 	}
@@ -113,12 +110,12 @@ func (ms *DBStorage) GetJSON(metric models.Metric, ctx context.Context) (DTO.Met
 		metric, err := ms.GetGauge(m.GetName(), ctx)
 
 		if err != nil {
-			return DTO.Metrics{}, err
+			return dto.Metrics{}, err
 		}
 
 		value, ok := metric.GetValue().(float64)
 		if !ok {
-			return DTO.Metrics{}, fmt.Errorf("invalid type assertion: expected *float64")
+			return dto.Metrics{}, fmt.Errorf("invalid type assertion: expected *float64")
 		}
 		response.Value = &value
 
@@ -128,18 +125,18 @@ func (ms *DBStorage) GetJSON(metric models.Metric, ctx context.Context) (DTO.Met
 		metric, err := ms.GetCounter(m.GetName(), ctx)
 
 		if err != nil {
-			return DTO.Metrics{}, err
+			return dto.Metrics{}, err
 		}
 
 		delta, ok := metric.GetValue().(int64)
 		if !ok {
-			return DTO.Metrics{}, fmt.Errorf("invalid type assertion: expected *int64")
+			return dto.Metrics{}, fmt.Errorf("invalid type assertion: expected *int64")
 		}
 		response.Delta = &delta
 
 		return response, nil
 	default:
-		return DTO.Metrics{}, ErrInvalidMetricType
+		return dto.Metrics{}, ErrInvalidMetricType
 	}
 }
 
@@ -192,15 +189,15 @@ func (ms *DBStorage) GetAll(ctx context.Context) (map[string]models.GaugeMetric,
 	return gauges, counters, nil
 }
 
-func (ms *DBStorage) UpdateBatchJSON(metrics map[string]models.Metric, ctx context.Context) (map[string]DTO.Metrics, error) {
-	responses := make(map[string]DTO.Metrics)
+func (ms *DBStorage) UpdateBatchJSON(metrics map[string]models.Metric, ctx context.Context) (map[string]dto.Metrics, error) {
+	responses := make(map[string]dto.Metrics)
 
 	for key, metric := range metrics {
 		if key == "" {
 			return nil, ErrInvalidMetricID
 		}
 
-		response := DTO.Metrics{
+		response := dto.Metrics{
 			ID:    key,
 			MType: string(metric.GetType()),
 		}

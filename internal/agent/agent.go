@@ -3,7 +3,7 @@ package agent
 import (
 	"time"
 
-	"github.com/GarikMirzoyan/metricalert/internal/DTO"
+	dto "github.com/GarikMirzoyan/metricalert/internal/DTO"
 	"github.com/GarikMirzoyan/metricalert/internal/agent/config"
 	"github.com/GarikMirzoyan/metricalert/internal/metrics"
 )
@@ -43,14 +43,14 @@ func (a *Agent) startReporting() {
 	}
 }
 
-func (a *Agent) prepareMetricsBatch() []DTO.Metrics {
-	var batch []DTO.Metrics
+func (a *Agent) prepareMetricsBatch() []dto.Metrics {
+	var batch []dto.Metrics
 
 	// Собираем gauge метрики
 	collected := metrics.CollectMetrics()
 	for name, value := range collected {
 		val := float64(value)
-		batch = append(batch, DTO.Metrics{
+		batch = append(batch, dto.Metrics{
 			ID:    name,
 			MType: "gauge",
 			Value: &val,
@@ -59,7 +59,7 @@ func (a *Agent) prepareMetricsBatch() []DTO.Metrics {
 
 	// Добавляем PollCount как counter
 	delta := int64(a.pollCount)
-	batch = append(batch, DTO.Metrics{
+	batch = append(batch, dto.Metrics{
 		ID:    "PollCount",
 		MType: "counter",
 		Delta: &delta,

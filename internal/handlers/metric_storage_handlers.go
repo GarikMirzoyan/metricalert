@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/GarikMirzoyan/metricalert/internal/DTO"
+	dto "github.com/GarikMirzoyan/metricalert/internal/DTO"
 	"github.com/GarikMirzoyan/metricalert/internal/metrics"
 	"github.com/GarikMirzoyan/metricalert/internal/models"
 	"github.com/GarikMirzoyan/metricalert/internal/utils"
@@ -63,7 +63,7 @@ func (h *Handler) UpdateHandlerJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var request DTO.Metrics
+	var request dto.Metrics
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 	}
@@ -136,7 +136,7 @@ func (h *Handler) GetValueHandlerJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var request DTO.Metrics
+	var request dto.Metrics
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 	}
@@ -199,7 +199,7 @@ func (h *Handler) BatchMetricsUpdateHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var metricsDTO []DTO.Metrics
+	var metricsDTO []dto.Metrics
 	if err := json.NewDecoder(r.Body).Decode(&metricsDTO); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return

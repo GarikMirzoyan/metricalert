@@ -13,7 +13,7 @@ import (
 	"strconv"
 
 	// Используем псевдонимы для избежания конфликта имен
-	"github.com/GarikMirzoyan/metricalert/internal/DTO"
+	dto "github.com/GarikMirzoyan/metricalert/internal/DTO"
 	agentConfig "github.com/GarikMirzoyan/metricalert/internal/agent/config"
 	"github.com/GarikMirzoyan/metricalert/internal/constants"
 	"github.com/GarikMirzoyan/metricalert/internal/models"
@@ -53,7 +53,7 @@ func NewMetric(metricType, metricName, metricValue string) (models.Metric, error
 	}
 }
 
-func NewMetricFromDTO(metricDTO DTO.Metrics) (models.Metric, error) {
+func NewMetricFromDTO(metricDTO dto.Metrics) (models.Metric, error) {
 	switch constants.MetricType(metricDTO.MType) {
 	case constants.GaugeName:
 		return &models.GaugeMetric{
@@ -123,7 +123,7 @@ func CollectMetrics() map[string]Gauge {
 	return metrics
 }
 
-func SendMetric(metric DTO.Metrics, config agentConfig.Config) {
+func SendMetric(metric dto.Metrics, config agentConfig.Config) {
 	url := fmt.Sprintf("%s/update/", config.Address)
 
 	body, err := json.Marshal(metric)
@@ -159,7 +159,7 @@ func SendMetric(metric DTO.Metrics, config agentConfig.Config) {
 	}
 }
 
-func SendBatchMetrics(metrics []DTO.Metrics, config agentConfig.Config) {
+func SendBatchMetrics(metrics []dto.Metrics, config agentConfig.Config) {
 	url := fmt.Sprintf("%s/updates/", config.Address)
 
 	body, err := json.Marshal(metrics)
