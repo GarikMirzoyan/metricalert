@@ -33,6 +33,7 @@ var (
 )
 
 func NewMetric(metricType, metricName, metricValue string) (models.Metric, error) {
+
 	switch constants.MetricType(metricType) {
 	case constants.GaugeName:
 		val, err := strconv.ParseFloat(metricValue, 64)

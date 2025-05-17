@@ -44,8 +44,8 @@ func (ms *DBStorage) UpdateJSON(metric models.Metric, ctx context.Context) (dto.
 	}
 
 	switch m := metric.(type) {
-	case models.GaugeMetric:
-		value, ok := metric.GetValue().(*float64)
+	case *models.GaugeMetric:
+		value, ok := metric.GetValue().(float64)
 		if !ok {
 			return dto.Metrics{}, fmt.Errorf("invalid type assertion: expected *float64")
 		}
@@ -55,10 +55,10 @@ func (ms *DBStorage) UpdateJSON(metric models.Metric, ctx context.Context) (dto.
 			return dto.Metrics{}, err
 		}
 
-		response.Value = value
+		response.Value = &value
 
-	case models.CounterMetric:
-		delta, ok := metric.GetValue().(*int64)
+	case *models.CounterMetric:
+		delta, ok := metric.GetValue().(int64)
 		if !ok {
 			return dto.Metrics{}, fmt.Errorf("invalid type assertion: expected *int64")
 		}
@@ -68,7 +68,7 @@ func (ms *DBStorage) UpdateJSON(metric models.Metric, ctx context.Context) (dto.
 			return dto.Metrics{}, err
 		}
 
-		response.Delta = delta
+		response.Delta = &delta
 
 	default:
 		return dto.Metrics{}, ErrInvalidMetricType
