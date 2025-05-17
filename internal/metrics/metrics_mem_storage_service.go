@@ -60,21 +60,21 @@ func (ms *MemStorage) UpdateJSON(metric models.Metric, ctx context.Context) (dto
 		if err := ms.UpdateGauge(m, ctx); err != nil {
 			return dto.Metrics{}, fmt.Errorf("failed to update gauge: %w", err)
 		}
-		value, ok := metric.GetValue().(*float64)
+		value, ok := metric.GetValue().(float64)
 		if !ok {
 			return dto.Metrics{}, fmt.Errorf("invalid type assertion: expected *float64")
 		}
-		response.Value = value
+		response.Value = &value
 
 	case *models.CounterMetric:
 		if err := ms.UpdateCounter(m, ctx); err != nil {
 			return dto.Metrics{}, fmt.Errorf("failed to update counter: %w", err)
 		}
-		delta, ok := metric.GetValue().(*int64)
+		delta, ok := metric.GetValue().(int64)
 		if !ok {
 			return dto.Metrics{}, fmt.Errorf("invalid type assertion: expected *int64")
 		}
-		response.Delta = delta
+		response.Delta = &delta
 
 	default:
 		return dto.Metrics{}, ErrInvalidMetricType
