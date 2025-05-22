@@ -12,6 +12,7 @@ type Config struct {
 	Address        string
 	ReportInterval time.Duration
 	PollInterval   time.Duration
+	Key            string
 }
 
 func InitConfig() Config {
@@ -19,16 +20,22 @@ func InitConfig() Config {
 	defaultAddress := "localhost:8080"
 	defaultReportInterval := 10 * time.Second
 	defaultPollInterval := 2 * time.Second
+	defaultCryptoKey := ""
 
 	// Читаем флаги командной строки
 	address := flag.String("a", defaultAddress, "HTTP server address (without http:// or https://)")
 	reportInterval := flag.Int("r", int(defaultReportInterval.Seconds()), "Report interval in seconds")
 	pollInterval := flag.Int("p", int(defaultPollInterval.Seconds()), "Poll interval in seconds")
+	cryptoKey := flag.String("k", defaultCryptoKey, "Crypto key for hmac")
 	flag.Parse()
 
 	// Читаем переменные окружения
 	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
 		*address = envAddress
+	}
+
+	if envCryptoKey := os.Getenv("KEY"); envCryptoKey != "" {
+		*cryptoKey = envCryptoKey
 	}
 
 	if envReportInterval := os.Getenv("REPORT_INTERVAL"); envReportInterval != "" {
@@ -52,5 +59,6 @@ func InitConfig() Config {
 		Address:        finalAddress,
 		ReportInterval: time.Duration(*reportInterval) * time.Second,
 		PollInterval:   time.Duration(*pollInterval) * time.Second,
+		Key:            *cryptoKey,
 	}
 }
