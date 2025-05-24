@@ -18,6 +18,7 @@ import (
 	"github.com/GarikMirzoyan/metricalert/internal/constants"
 	"github.com/GarikMirzoyan/metricalert/internal/models"
 	"github.com/GarikMirzoyan/metricalert/internal/retry"
+	"github.com/GarikMirzoyan/metricalert/internal/security"
 )
 
 type Gauge float64
@@ -133,6 +134,12 @@ func SendMetric(metric dto.Metrics, config agentConfig.Config) {
 		return
 	}
 
+	var hash string
+
+	if config.Key != "" {
+		hash = security.ComputeHMACSHA256(body, []byte(config.Key))
+	}
+
 	compressedBody, err := compressGzip(body)
 	if err != nil {
 		log.Printf("ошибка сжатия данных: %v", err)
@@ -147,6 +154,9 @@ func SendMetric(metric dto.Metrics, config agentConfig.Config) {
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
+	if hash != "" {
+		req.Header.Set("HashSHA256", hash)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -169,6 +179,12 @@ func SendBatchMetrics(metrics []dto.Metrics, config agentConfig.Config) {
 		return
 	}
 
+	// Хешируем оригинальное (несжатое) тело, если есть ключ
+	var hash string
+	if config.Key != "" {
+		hash = security.ComputeHMACSHA256(body, []byte(config.Key))
+	}
+
 	compressedBody, err := compressGzip(body)
 	if err != nil {
 		log.Printf("ошибка сжатия тела запроса: %v", err)
@@ -183,6 +199,11 @@ func SendBatchMetrics(metrics []dto.Metrics, config agentConfig.Config) {
 
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Content-Encoding", "gzip")
+
+		// Добавляем заголовок с HMAC, если он есть
+		if hash != "" {
+			req.Header.Set("HashSHA256", hash)
+		}
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
