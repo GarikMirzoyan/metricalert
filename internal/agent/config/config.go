@@ -3,6 +3,7 @@ package config
 import (
 	"flag"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -13,6 +14,7 @@ type Config struct {
 	ReportInterval time.Duration
 	PollInterval   time.Duration
 	Key            string
+	RateLimit      int
 }
 
 func InitConfig() Config {
@@ -21,13 +23,21 @@ func InitConfig() Config {
 	defaultReportInterval := 10 * time.Second
 	defaultPollInterval := 2 * time.Second
 	defaultCryptoKey := ""
+	defaultRateLimit := 5
 
 	// Читаем флаги командной строки
 	address := flag.String("a", defaultAddress, "HTTP server address (without http:// or https://)")
 	reportInterval := flag.Int("r", int(defaultReportInterval.Seconds()), "Report interval in seconds")
 	pollInterval := flag.Int("p", int(defaultPollInterval.Seconds()), "Poll interval in seconds")
 	cryptoKey := flag.String("k", defaultCryptoKey, "Crypto key for hmac")
+	rateLimit := flag.Int("l", defaultRateLimit, "Max number of parallel outgoing requests")
 	flag.Parse()
+
+	if envRateLimit := os.Getenv("RATE_LIMIT"); envRateLimit != "" {
+		if rl, err := strconv.Atoi(envRateLimit); err == nil {
+			*rateLimit = rl
+		}
+	}
 
 	// Читаем переменные окружения
 	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
@@ -60,5 +70,6 @@ func InitConfig() Config {
 		ReportInterval: time.Duration(*reportInterval) * time.Second,
 		PollInterval:   time.Duration(*pollInterval) * time.Second,
 		Key:            *cryptoKey,
+		RateLimit:      *rateLimit,
 	}
 }
