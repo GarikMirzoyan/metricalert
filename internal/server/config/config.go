@@ -13,6 +13,7 @@ type Config struct {
 	Restore            bool
 	Address            string
 	DBConnectionString string
+	Key                string
 }
 
 func InitConfig() Config {
@@ -21,6 +22,7 @@ func InitConfig() Config {
 	defaultRestore := true
 	//"postgres://mirzoangarikaregovic@localhost:5432/metricalert"
 	defaultDBConnectionString := ""
+	defaultCryptoKey := ""
 
 	defaultAddress := "localhost:8080"
 	address := flag.String("a", defaultAddress, "HTTP server address (without http:// or https://)")
@@ -28,6 +30,7 @@ func InitConfig() Config {
 	fileStoragePath := flag.String("f", defaultFileStoragePath, "Path to file where metrics will be saved")
 	restore := flag.Bool("r", defaultRestore, "Restore metrics from file on start (true/false)")
 	DBConnectionString := flag.String("d", defaultDBConnectionString, "DB connction string")
+	cryptoKey := flag.String("k", defaultCryptoKey, "Crypto key for hmac")
 	flag.Parse()
 
 	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
@@ -36,6 +39,10 @@ func InitConfig() Config {
 
 	if envDBDSN := os.Getenv("DATABASE_DSN"); envDBDSN != "" {
 		*DBConnectionString = envDBDSN
+	}
+
+	if envCryptoKey := os.Getenv("KEY"); envCryptoKey != "" {
+		*cryptoKey = envCryptoKey
 	}
 
 	// Чтение из переменных окружения
@@ -59,5 +66,6 @@ func InitConfig() Config {
 		Restore:            *restore,
 		Address:            *address,
 		DBConnectionString: *DBConnectionString,
+		Key:                *cryptoKey,
 	}
 }

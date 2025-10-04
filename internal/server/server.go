@@ -7,6 +7,7 @@ import (
 	"github.com/GarikMirzoyan/metricalert/internal/handlers"
 	"github.com/GarikMirzoyan/metricalert/internal/metrics"
 	"github.com/GarikMirzoyan/metricalert/internal/middleware/gzipmiddleware"
+	"github.com/GarikMirzoyan/metricalert/internal/middleware/hmacmiddleware"
 	"github.com/GarikMirzoyan/metricalert/internal/middleware/loggermiddleware"
 	"github.com/GarikMirzoyan/metricalert/internal/repositories"
 	"github.com/GarikMirzoyan/metricalert/internal/server/config"
@@ -34,9 +35,9 @@ func Run() {
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
 
-	SetMiddlewares(r, logger)
-
 	config := config.InitConfig()
+
+	SetMiddlewares(r, logger, config)
 
 	var storage metrics.MetricStorage
 
@@ -95,13 +96,18 @@ func Run() {
 	}
 }
 
-func SetMiddlewares(r *chi.Mux, logger *zap.Logger) {
+func SetMiddlewares(r *chi.Mux, logger *zap.Logger, config config.Config) {
 	// Добавляем middleware для логирования и сжатия
 	r.Use(func(next http.Handler) http.Handler {
 		return loggermiddleware.Logger(next, logger)
 	})
 	r.Use(gzipmiddleware.GzipDecompression) // Разжатие входящих данных
 	r.Use(gzipmiddleware.GzipCompression)   // Сжатие исходящих данных
+
+	hmacMiddleware := hmacmiddleware.NewHMACMiddleware(config.Key)
+	if hmacMiddleware != nil {
+		r.Use(hmacMiddleware.Middleware) // дешифровка данных
+	}
 }
 
 func SetMetricRoutes(r *chi.Mux, handlers *handlers.Handler) {
