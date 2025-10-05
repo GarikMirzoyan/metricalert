@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"sync"
 
 	"github.com/GarikMirzoyan/metricalert/internal/security"
 )
@@ -28,13 +29,19 @@ func (h *HMACMiddleware) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		var body []byte
 		var err error
 
 		if receivedHash != "" {
 			// Читаем тело только если нужна проверка
-			body, err = io.ReadAll(r.Body)
-			if err != nil {
+			buf := requestBufPool.Get().(*bytes.Buffer)
+			buf.Reset()
+
+			defer func() {
+				buf.Reset()
+				requestBufPool.Put(buf)
+			}()
+
+			if _, err = io.Copy(buf, r.Body); err != nil {
 				http.Error(w, "cannot read body", http.StatusBadRequest)
 				return
 			}
@@ -54,7 +61,7 @@ func (h *HMACMiddleware) Middleware(next http.Handler) http.Handler {
 			rec := &responseWriterWithHash{
 				ResponseWriter: w,
 				key:            h.Key,
-				buf:            &bytes.Buffer{},
+				buf:            respBuf,
 			}
 
 			next.ServeHTTP(rec, r)
@@ -62,8 +69,14 @@ func (h *HMACMiddleware) Middleware(next http.Handler) http.Handler {
 			hash := security.ComputeHMACSHA256(rec.buf.Bytes(), h.Key)
 			rec.Header().Set("HashSHA256", hash)
 
+			if rec.statusCode == 0 {
+				rec.statusCode = http.StatusOK
+			}
 			rec.ResponseWriter.WriteHeader(rec.statusCode)
-			rec.ResponseWriter.Write(rec.buf.Bytes())
+			_, _ = rec.ResponseWriter.Write(rec.buf.Bytes())
+
+			rec.buf.Reset()
+			responseBufPool.Put(rec.buf)
 		} else {
 			// Без ключа — обычный ответ
 			next.ServeHTTP(w, r)
@@ -85,3 +98,6 @@ func (r *responseWriterWithHash) WriteHeader(statusCode int) {
 func (r *responseWriterWithHash) Write(b []byte) (int, error) {
 	return r.buf.Write(b)
 }
+
+var requestBufPool = sync.Pool{New: func() any { return new(bytes.Buffer) }}
+var responseBufPool = sync.Pool{New: func() any { return new(bytes.Buffer) }}
