@@ -19,12 +19,14 @@ import (
 	"go.uber.org/zap"
 )
 
+// MemStorage stores metrics in memory; safe for concurrent use.
 type MemStorage struct {
 	gauges   map[string]models.GaugeMetric
 	counters map[string]models.CounterMetric
 	mu       sync.Mutex
 }
 
+// NewMemStorage creates an empty in-memory storage implementation.
 func NewMemStorage() *MemStorage {
 	return &MemStorage{
 		gauges:   make(map[string]models.GaugeMetric),
@@ -32,6 +34,7 @@ func NewMemStorage() *MemStorage {
 	}
 }
 
+// Update routes metric to the appropriate updater based on its type.
 func (ms *MemStorage) Update(metric models.Metric, ctx context.Context) error {
 	switch m := metric.(type) {
 	case *models.GaugeMetric:
@@ -43,6 +46,7 @@ func (ms *MemStorage) Update(metric models.Metric, ctx context.Context) error {
 	}
 }
 
+// UpdateJSON updates a metric and returns a DTO representation.
 func (ms *MemStorage) UpdateJSON(metric models.Metric, ctx context.Context) (dto.Metrics, error) {
 	// Проверка на nil значение
 	if metric.GetValue() == nil {
@@ -83,6 +87,7 @@ func (ms *MemStorage) UpdateJSON(metric models.Metric, ctx context.Context) (dto
 	return response, nil
 }
 
+// GetValue returns metric value as string by type and name.
 func (ms *MemStorage) GetValue(metricType, metricName string, ctx context.Context) (string, error) {
 	switch constants.MetricType(metricType) {
 	case constants.GaugeName:
@@ -104,6 +109,7 @@ func (ms *MemStorage) GetValue(metricType, metricName string, ctx context.Contex
 	}
 }
 
+// GetJSON returns a DTO with the current value of the provided metric.
 func (ms *MemStorage) GetJSON(metric models.Metric, ctx context.Context) (dto.Metrics, error) {
 	// Создание ответа
 	response := dto.Metrics{
@@ -148,6 +154,7 @@ func (ms *MemStorage) GetJSON(metric models.Metric, ctx context.Context) (dto.Me
 	}
 }
 
+// UpdateGauge upserts a gauge metric.
 func (ms *MemStorage) UpdateGauge(metric *models.GaugeMetric, ctx context.Context) error {
 	if metric.Name == "" {
 		return fmt.Errorf("metric name is empty")
@@ -160,6 +167,7 @@ func (ms *MemStorage) UpdateGauge(metric *models.GaugeMetric, ctx context.Contex
 	return nil
 }
 
+// UpdateCounter increments counter by delta or sets if first time.
 func (ms *MemStorage) UpdateCounter(metric *models.CounterMetric, ctx context.Context) error {
 	if metric.Name == "" {
 		return fmt.Errorf("metric name is empty")
@@ -175,6 +183,7 @@ func (ms *MemStorage) UpdateCounter(metric *models.CounterMetric, ctx context.Co
 	return nil
 }
 
+// GetGauge returns a gauge metric by name.
 func (ms *MemStorage) GetGauge(name string, ctx context.Context) (models.GaugeMetric, error) {
 	metric, exists := ms.gauges[name]
 	if !exists {
@@ -183,6 +192,7 @@ func (ms *MemStorage) GetGauge(name string, ctx context.Context) (models.GaugeMe
 	return metric, nil
 }
 
+// GetCounter returns a counter metric by name.
 func (ms *MemStorage) GetCounter(name string, ctx context.Context) (models.CounterMetric, error) {
 	metric, exists := ms.counters[name]
 	if !exists {
@@ -191,6 +201,7 @@ func (ms *MemStorage) GetCounter(name string, ctx context.Context) (models.Count
 	return metric, nil
 }
 
+// GetAll returns all gauges and counters.
 func (ms *MemStorage) GetAll(ctx context.Context) (map[string]models.GaugeMetric, map[string]models.CounterMetric, error) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
@@ -209,6 +220,7 @@ func (ms *MemStorage) GetAll(ctx context.Context) (map[string]models.GaugeMetric
 	return gauges, counters, nil
 }
 
+// UpdateBatchJSON updates multiple metrics and returns a map of DTOs by ID.
 func (ms *MemStorage) UpdateBatchJSON(metrics []models.Metric, ctx context.Context) (map[string]dto.Metrics, error) {
 	responses := make(map[string]dto.Metrics)
 
@@ -240,6 +252,7 @@ func (ms *MemStorage) UpdateBatchJSON(metrics []models.Metric, ctx context.Conte
 	return responses, nil
 }
 
+// LoadMetricsFromFile restores metrics from JSONL file if Restore is enabled.
 func (ms *MemStorage) LoadMetricsFromFile(config serverConfig.Config) error {
 	if !config.Restore {
 		return nil
@@ -296,6 +309,7 @@ func (ms *MemStorage) LoadMetricsFromFile(config serverConfig.Config) error {
 	return nil
 }
 
+// SaveMetricsToFile persists current metrics to file in JSONL format.
 func (ms *MemStorage) SaveMetricsToFile(config serverConfig.Config) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
@@ -336,7 +350,7 @@ func (ms *MemStorage) SaveMetricsToFile(config serverConfig.Config) error {
 	return nil
 }
 
-// Функция для периодического сохранения метрик
+// StartMetricSaving periodically saves metrics according to StoreInterval.
 func (ms *MemStorage) StartMetricSaving(config serverConfig.Config, logger *zap.Logger) {
 	if config.StoreInterval == 0 {
 		// 🔁 Однократное сохранение при запуске

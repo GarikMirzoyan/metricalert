@@ -2,6 +2,7 @@ package models
 
 import "github.com/GarikMirzoyan/metricalert/internal/constants"
 
+// CounterMetric represents an integer metric.
 type CounterMetric struct {
 	Name  string
 	Type  constants.MetricType

@@ -2,6 +2,7 @@ package models
 
 import "github.com/GarikMirzoyan/metricalert/internal/constants"
 
+// GaugeMetric represents a floating-point metric.
 type GaugeMetric struct {
 	Name  string
 	Type  constants.MetricType

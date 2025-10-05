@@ -11,16 +11,19 @@ import (
 	"github.com/GarikMirzoyan/metricalert/internal/repositories"
 )
 
+// DBStorage persists and reads metrics through a repository backed by DB.
 type DBStorage struct {
 	metricRepository *repositories.MetricRepository
 }
 
+// NewDBStorage creates DB-backed storage with the provided repository.
 func NewDBStorage(metricRepository *repositories.MetricRepository) *DBStorage {
 	return &DBStorage{
 		metricRepository: metricRepository,
 	}
 }
 
+// Update routes metric to the appropriate updater based on its type.
 func (ms *DBStorage) Update(metric models.Metric, ctx context.Context) error {
 	switch m := metric.(type) {
 	case *models.GaugeMetric:
@@ -32,6 +35,7 @@ func (ms *DBStorage) Update(metric models.Metric, ctx context.Context) error {
 	}
 }
 
+// UpdateJSON updates a metric and returns a DTO representation.
 func (ms *DBStorage) UpdateJSON(metric models.Metric, ctx context.Context) (dto.Metrics, error) {
 	// Проверка на nil значение
 	if metric.GetValue() == nil {
@@ -78,6 +82,7 @@ func (ms *DBStorage) UpdateJSON(metric models.Metric, ctx context.Context) (dto.
 	return response, nil
 }
 
+// GetValue returns metric value from DB as string by type and name.
 func (ms *DBStorage) GetValue(metricType, metricName string, ctx context.Context) (string, error) {
 	switch constants.MetricType(metricType) {
 	case constants.GaugeName:
@@ -99,6 +104,7 @@ func (ms *DBStorage) GetValue(metricType, metricName string, ctx context.Context
 	}
 }
 
+// GetJSON returns a DTO with the current value of the provided metric.
 func (ms *DBStorage) GetJSON(metric models.Metric, ctx context.Context) (dto.Metrics, error) {
 	// Создание ответа
 	response := dto.Metrics{
@@ -141,6 +147,7 @@ func (ms *DBStorage) GetJSON(metric models.Metric, ctx context.Context) (dto.Met
 	}
 }
 
+// UpdateGauge upserts a gauge metric in DB.
 func (ms *DBStorage) UpdateGauge(metric *models.GaugeMetric, ctx context.Context) error {
 	if metric.Name == "" {
 		return fmt.Errorf("gauge metric name is empty")
@@ -148,6 +155,7 @@ func (ms *DBStorage) UpdateGauge(metric *models.GaugeMetric, ctx context.Context
 	return ms.metricRepository.Update(metric, ctx)
 }
 
+// UpdateCounter updates a counter in DB and returns new accumulated value.
 func (ms *DBStorage) UpdateCounter(metric *models.CounterMetric, ctx context.Context) error {
 	if metric.Name == "" {
 		return fmt.Errorf("counter metric name is empty")
@@ -168,6 +176,7 @@ func (ms *DBStorage) UpdateCounter(metric *models.CounterMetric, ctx context.Con
 	return nil
 }
 
+// GetGauge returns a gauge metric by name from DB.
 func (ms *DBStorage) GetGauge(name string, ctx context.Context) (models.GaugeMetric, error) {
 	val, err := ms.metricRepository.GetGaugeValue(name, ctx)
 	if err != nil {
@@ -181,6 +190,7 @@ func (ms *DBStorage) GetGauge(name string, ctx context.Context) (models.GaugeMet
 	}, nil
 }
 
+// GetCounter returns a counter metric by name from DB.
 func (ms *DBStorage) GetCounter(name string, ctx context.Context) (models.CounterMetric, error) {
 	val, err := ms.metricRepository.GetCounterValue(name, ctx)
 	if err != nil {
@@ -194,6 +204,7 @@ func (ms *DBStorage) GetCounter(name string, ctx context.Context) (models.Counte
 	}, nil
 }
 
+// GetAll returns all metrics stored in DB grouped by type.
 func (ms *DBStorage) GetAll(ctx context.Context) (map[string]models.GaugeMetric, map[string]models.CounterMetric, error) {
 	gauges, counters, err := ms.metricRepository.GetAllMetrics(ctx)
 	if err != nil {
@@ -203,6 +214,7 @@ func (ms *DBStorage) GetAll(ctx context.Context) (map[string]models.GaugeMetric,
 	return gauges, counters, nil
 }
 
+// UpdateBatchJSON updates multiple metrics in DB and returns DTOs by ID.
 func (ms *DBStorage) UpdateBatchJSON(metrics []models.Metric, ctx context.Context) (map[string]dto.Metrics, error) {
 	responses := make(map[string]dto.Metrics)
 

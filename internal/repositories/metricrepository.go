@@ -8,22 +8,26 @@ import (
 	"github.com/GarikMirzoyan/metricalert/internal/models"
 )
 
+// MetricRepository provides database operations for metrics.
 type MetricRepository struct {
 	DBConn database.DBConn
 }
 
+// NewMetricRepository creates a repository backed by the given DB connection.
 func NewMetricRepository(DBConn database.DBConn) *MetricRepository {
 	MetricRepository := &MetricRepository{DBConn: DBConn}
 
 	return MetricRepository
 }
 
+// Update upserts a metric value by name and type.
 func (mr *MetricRepository) Update(metric models.Metric, ctx context.Context) error {
 	_, err := mr.DBConn.Exec(ctx, queryInsertSingleMetric, metric.GetName(), metric.GetType(), metric.GetValue())
 
 	return err
 }
 
+// GetGaugeValue returns the latest gauge value by name.
 func (mr *MetricRepository) GetGaugeValue(metricName string, ctx context.Context) (float64, error) {
 	var value float64
 	err := mr.DBConn.QueryRow(ctx, querySelectGauge, metricName).Scan(&value)
@@ -33,6 +37,7 @@ func (mr *MetricRepository) GetGaugeValue(metricName string, ctx context.Context
 	return value, nil
 }
 
+// GetCounterValue returns the latest counter value by name.
 func (mr *MetricRepository) GetCounterValue(metricName string, ctx context.Context) (int64, error) {
 	var fvalue float64
 	err := mr.DBConn.QueryRow(ctx, querySelectCounter, metricName).Scan(&fvalue)
@@ -42,6 +47,7 @@ func (mr *MetricRepository) GetCounterValue(metricName string, ctx context.Conte
 	return int64(fvalue), nil
 }
 
+// GetAllMetrics returns all metrics grouped by type.
 func (mr *MetricRepository) GetAllMetrics(ctx context.Context) (map[string]models.GaugeMetric, map[string]models.CounterMetric, error) {
 	rows, err := mr.DBConn.Query(ctx, querySelectAllMetrics)
 	if err != nil {
@@ -84,6 +90,7 @@ func (mr *MetricRepository) GetAllMetrics(ctx context.Context) (map[string]model
 	return gauges, counters, nil
 }
 
+// BatchUpdate inserts multiple metrics in a single transaction.
 func (mr *MetricRepository) BatchUpdate(metrics []models.Metric, ctx context.Context) error {
 	tx, err := mr.DBConn.Begin(ctx)
 	if err != nil {

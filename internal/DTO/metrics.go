@@ -1,5 +1,6 @@
 package dto
 
+// Metrics represents a metric transfer object used by HTTP JSON APIs.
 type Metrics struct {
 	ID    string   `json:"id"`              // имя метрики
 	MType string   `json:"type"`            // параметр, принимающий значение gauge или counter

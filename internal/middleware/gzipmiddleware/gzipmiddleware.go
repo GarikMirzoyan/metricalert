@@ -15,6 +15,7 @@ func (gzw *gzipResponseWriter) Write(p []byte) (int, error) {
 	return gzw.Writer.Write(p)
 }
 
+// GzipDecompression decompresses gzip-encoded request bodies.
 func GzipDecompression(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Content-Encoding") == "gzip" {
@@ -31,7 +32,7 @@ func GzipDecompression(next http.Handler) http.Handler {
 	})
 }
 
-// Middleware для сжатия исходящих данных
+// GzipCompression compresses responses when client accepts gzip.
 func GzipCompression(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Проверяем, поддерживает ли клиент gzip-сжатие

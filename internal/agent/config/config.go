@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Структура конфигурации для агента
+// Config holds agent configuration: server address, intervals, HMAC key and rate limit.
 type Config struct {
 	Address        string
 	ReportInterval time.Duration
@@ -17,6 +17,7 @@ type Config struct {
 	RateLimit      int
 }
 
+// InitConfig reads flags and environment variables to build agent configuration.
 func InitConfig() Config {
 	// Значения по умолчанию
 	defaultAddress := "localhost:8080"

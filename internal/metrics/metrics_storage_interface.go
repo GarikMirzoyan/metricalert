@@ -7,6 +7,8 @@ import (
 	"github.com/GarikMirzoyan/metricalert/internal/models"
 )
 
+// MetricStorage describes the storage backend for metrics.
+// Implementations include in-memory storage and PostgreSQL-backed storage.
 type MetricStorage interface {
 	Update(metric models.Metric, ctx context.Context) error
 	UpdateGauge(metric *models.GaugeMetric, ctx context.Context) error

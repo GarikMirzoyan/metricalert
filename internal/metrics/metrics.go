@@ -21,7 +21,10 @@ import (
 	"github.com/GarikMirzoyan/metricalert/internal/security"
 )
 
+// Gauge represents a floating-point metric value.
 type Gauge float64
+
+// Counter represents an integer metric value aggregated over time.
 type Counter int64
 
 var (
@@ -33,6 +36,7 @@ var (
 	ErrInvalidMetricID    = errors.New("metric ID is required")
 )
 
+// NewMetric constructs a Metric from path parameters: type, name and value.
 func NewMetric(metricType, metricName, metricValue string) (models.Metric, error) {
 
 	switch constants.MetricType(metricType) {
@@ -48,13 +52,14 @@ func NewMetric(metricType, metricName, metricValue string) (models.Metric, error
 		if err != nil {
 			return nil, fmt.Errorf("invalid counter value: %w", err)
 		}
-		return &models.CounterMetric{Name: metricName, Type: constants.GaugeName, Value: val}, nil
+		return &models.CounterMetric{Name: metricName, Type: constants.CounterName, Value: val}, nil
 
 	default:
 		return nil, fmt.Errorf("unknown metric type: %s", metricType)
 	}
 }
 
+// NewMetricFromDTO constructs a Metric from DTO payload.
 func NewMetricFromDTO(metricDTO dto.Metrics) (models.Metric, error) {
 	switch constants.MetricType(metricDTO.MType) {
 	case constants.GaugeName:
@@ -86,7 +91,7 @@ func NewMetricFromDTO(metricDTO dto.Metrics) (models.Metric, error) {
 	}
 }
 
-// Получаем метрики из структуры, хранящ статистику по памяти Go-приложения
+// CollectMetrics returns a snapshot of runtime memory metrics and a random value.
 func CollectMetrics() map[string]Gauge {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
@@ -125,6 +130,7 @@ func CollectMetrics() map[string]Gauge {
 	return metrics
 }
 
+// SendMetric sends a single metric to the server using JSON and gzip.
 func SendMetric(metric dto.Metrics, config agentConfig.Config) {
 	url := fmt.Sprintf("%s/update/", config.Address)
 
@@ -170,6 +176,7 @@ func SendMetric(metric dto.Metrics, config agentConfig.Config) {
 	}
 }
 
+// SendBatchMetrics sends a batch of metrics with retries and HMAC header if configured.
 func SendBatchMetrics(metrics []dto.Metrics, config agentConfig.Config) {
 	url := fmt.Sprintf("%s/updates/", config.Address)
 
@@ -228,7 +235,7 @@ func SendBatchMetrics(metrics []dto.Metrics, config agentConfig.Config) {
 	}
 }
 
-// Функция для сжатия данных в формате gzip
+// compressGzip compresses data with gzip.
 func compressGzip(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	gzipWriter := gzip.NewWriter(&buf)

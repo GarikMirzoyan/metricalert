@@ -17,6 +17,7 @@ import (
 var gopsutilMetrics = make(map[string]float64)
 var gopsutilMu sync.Mutex
 
+// Agent collects runtime and system metrics and reports them to server.
 type Agent struct {
 	config    config.Config
 	pollCount metrics.Counter
@@ -24,10 +25,12 @@ type Agent struct {
 	done      chan struct{}
 }
 
+// MetricJob carries a batch of metrics to be sent.
 type MetricJob struct {
 	Batch []dto.Metrics
 }
 
+// NewAgent constructs a new Agent with the given configuration.
 func NewAgent(config config.Config) *Agent {
 	return &Agent{
 		config:    config,
@@ -37,6 +40,7 @@ func NewAgent(config config.Config) *Agent {
 	}
 }
 
+// Run starts workers and metric polling/batching loops.
 func (a *Agent) Run() {
 	for i := 0; i < a.config.RateLimit; i++ {
 		go a.worker()
