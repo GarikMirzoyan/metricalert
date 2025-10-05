@@ -9,16 +9,20 @@ import (
 	"github.com/GarikMirzoyan/metricalert/internal/security"
 )
 
+// HMACMiddleware validates request body using HMAC-SHA256 and signs responses.
 type HMACMiddleware struct {
 	Key []byte
 }
 
+// NewHMACMiddleware creates middleware with the provided HMAC key.
 func NewHMACMiddleware(key string) *HMACMiddleware {
 	return &HMACMiddleware{
 		Key: []byte(key),
 	}
 }
 
+// Middleware validates incoming request HMAC (when provided) and
+// attaches a response HMAC header "HashSHA256" for the response body.
 func (h *HMACMiddleware) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedHash := r.Header.Get("HashSHA256")

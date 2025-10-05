@@ -15,18 +15,21 @@ import (
 	"github.com/go-chi/chi"
 )
 
-// Handlers содержит зависимости
+// Handler groups HTTP handlers for metrics API and keeps dependencies.
 type Handler struct {
 	ms   metrics.MetricStorage
 	tmpl *template.Template
 }
 
+// NewHandlers constructs metric handlers with provided storage.
 func NewHandlers(ms metrics.MetricStorage) *Handler {
 	DBHandler := &Handler{ms: ms, tmpl: utils.InitTemplate()}
 
 	return DBHandler
 }
 
+// UpdateHandler handles path-based metric updates:
+// POST /update/{type}/{name}/{value}
 func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	metricType := chi.URLParam(r, "type")
 	metricName := chi.URLParam(r, "name")
@@ -56,6 +59,7 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
+// UpdateHandlerJSON handles JSON metric updates via POST /update/.
 func (h *Handler) UpdateHandlerJSON(w http.ResponseWriter, r *http.Request) {
 	// Проверка Content-Type
 	if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
@@ -103,6 +107,7 @@ func (h *Handler) UpdateHandlerJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetValueHandler returns metric value as plain text by type and name.
 func (h *Handler) GetValueHandler(w http.ResponseWriter, r *http.Request) {
 	metricType := chi.URLParam(r, "type")
 	metricName := chi.URLParam(r, "name")
@@ -130,6 +135,7 @@ func (h *Handler) GetValueHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(value))
 }
 
+// GetValueHandlerJSON returns metric value in JSON form for a given DTO.
 func (h *Handler) GetValueHandlerJSON(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Content-Type") != "application/json" {
 		http.Error(w, "Invalid Content-Type", http.StatusBadRequest)
@@ -171,6 +177,7 @@ func (h *Handler) GetValueHandlerJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// RootHandler renders an HTML page with all gauges and counters.
 func (h *Handler) RootHandler(w http.ResponseWriter, r *http.Request) {
 	gauges, counters, err := h.ms.GetAll(r.Context())
 	if err != nil {
@@ -193,6 +200,7 @@ func (h *Handler) RootHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// BatchMetricsUpdateHandler updates multiple metrics in a single request.
 func (h *Handler) BatchMetricsUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Content-Type") != "application/json" {
 		http.Error(w, "Invalid Content-Type", http.StatusBadRequest)

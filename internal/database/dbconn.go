@@ -5,6 +5,7 @@ import (
 	"database/sql"
 )
 
+// DBConn abstracts sql.DB for easier testing and mocking.
 type DBConn interface {
 	Ping(ctx context.Context) error
 

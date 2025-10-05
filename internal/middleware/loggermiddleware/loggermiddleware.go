@@ -24,7 +24,7 @@ func (ww *statusWriter) Write(p []byte) (int, error) {
 	return size, err
 }
 
-// Middleware для логирования запросов и ответов
+// Logger logs method, URI, status, response size and duration for each request.
 func Logger(next http.Handler, logger *zap.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()

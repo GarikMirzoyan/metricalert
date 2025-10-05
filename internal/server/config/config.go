@@ -6,7 +6,8 @@ import (
 	"time"
 )
 
-// Структура конфигурации для сервера
+// Config holds server configuration including storage options,
+// address, PostgreSQL DSN and optional HMAC key.
 type Config struct {
 	StoreInterval      time.Duration
 	FileStoragePath    string
@@ -16,6 +17,8 @@ type Config struct {
 	Key                string
 }
 
+// InitConfig reads configuration from flags and environment variables.
+// Environment variables have precedence over flags.
 func InitConfig() Config {
 	defaultStoreInterval := 30 * time.Second
 	defaultFileStoragePath := "../../internal/metrics/data/metrics.json"

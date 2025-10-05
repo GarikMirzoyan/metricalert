@@ -15,12 +15,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// Server wires HTTP routing, configuration and metric storage.
+// It hosts the HTTP API and manages middlewares.
 type Server struct {
 	storage metrics.MetricStorage
 	config  config.Config
 	logger  *zap.Logger
 }
 
+// NewServer creates a new Server with the provided storage, logger and config.
 func NewServer(storage metrics.MetricStorage, logger *zap.Logger, config config.Config) *Server {
 	server := &Server{
 		storage: storage,
@@ -30,6 +33,8 @@ func NewServer(storage metrics.MetricStorage, logger *zap.Logger, config config.
 	return server
 }
 
+// Run configures routes and middlewares, selects a storage backend
+// (in-memory or PostgreSQL), and starts the HTTP server.
 func Run() {
 	r := chi.NewRouter()
 	logger, _ := zap.NewProduction()
@@ -96,6 +101,8 @@ func Run() {
 	}
 }
 
+// SetMiddlewares registers request/response middlewares such as
+// structured logging, gzip compression/decompression and HMAC validation.
 func SetMiddlewares(r *chi.Mux, logger *zap.Logger, config config.Config) {
 	// Добавляем middleware для логирования и сжатия
 	r.Use(func(next http.Handler) http.Handler {
@@ -110,6 +117,7 @@ func SetMiddlewares(r *chi.Mux, logger *zap.Logger, config config.Config) {
 	}
 }
 
+// SetMetricRoutes registers HTTP endpoints for metric updates and reads.
 func SetMetricRoutes(r *chi.Mux, handlers *handlers.Handler) {
 	r.Post("/update/{type}/{name}/{value}", handlers.UpdateHandler)
 	r.Post("/update/", handlers.UpdateHandlerJSON)
@@ -119,6 +127,7 @@ func SetMetricRoutes(r *chi.Mux, handlers *handlers.Handler) {
 	r.Get("/", handlers.RootHandler)
 }
 
+// SetDBRoutes registers database health-check endpoints.
 func SetDBRoutes(r *chi.Mux, handlers *handlers.DBBaseHandler) {
 	r.Get("/ping", handlers.PingDBHandler)
 }
