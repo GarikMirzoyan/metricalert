@@ -48,7 +48,7 @@ func NewMetric(metricType, metricName, metricValue string) (models.Metric, error
 		if err != nil {
 			return nil, fmt.Errorf("invalid counter value: %w", err)
 		}
-		return &models.CounterMetric{Name: metricName, Type: constants.GaugeName, Value: val}, nil
+		return &models.CounterMetric{Name: metricName, Type: constants.CounterName, Value: val}, nil
 
 	default:
 		return nil, fmt.Errorf("unknown metric type: %s", metricType)
