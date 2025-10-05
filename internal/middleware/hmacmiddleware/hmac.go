@@ -48,16 +48,18 @@ func (h *HMACMiddleware) Middleware(next http.Handler) http.Handler {
 			r.Body.Close()
 
 			// Восстанавливаем тело запроса для следующих обработчиков
-			r.Body = io.NopCloser(bytes.NewBuffer(body))
+			r.Body = io.NopCloser(bytes.NewReader(buf.Bytes()))
 
 			// Проверка подписи
-			expectedHash := security.ComputeHMACSHA256(body, h.Key)
+			expectedHash := security.ComputeHMACSHA256(buf.Bytes(), h.Key)
 			if receivedHash != expectedHash {
 				http.Error(w, "invalid HMAC signature", http.StatusBadRequest)
 				return
 			}
 
 			// Оборачиваем writer для подписи ответа
+			respBuf := responseBufPool.Get().(*bytes.Buffer)
+			respBuf.Reset()
 			rec := &responseWriterWithHash{
 				ResponseWriter: w,
 				key:            h.Key,
