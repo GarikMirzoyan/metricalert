@@ -35,14 +35,20 @@ func Example_updateAndGetJSON() {
 	// Update gauge via JSON
 	v := 42.5
 	body, _ := json.Marshal(dto.Metrics{ID: "temperature", MType: "gauge", Value: &v})
-    resp, _ := http.Post(ts.URL+"/update/", "application/json", bytes.NewReader(body))
-    defer resp.Body.Close()
+	resp, err := http.Post(ts.URL+"/update/", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
 
 	// Read back via JSON
 	reqBody, _ := json.Marshal(dto.Metrics{ID: "temperature", MType: "gauge"})
-    resp2, _ := http.Post(ts.URL+"/value/", "application/json", bytes.NewReader(reqBody))
-    defer resp2.Body.Close()
-    b, _ := io.ReadAll(resp2.Body)
+	resp2, err := http.Post(ts.URL+"/value/", "application/json", bytes.NewReader(reqBody))
+	if err != nil {
+		return
+	}
+	defer resp2.Body.Close()
+	b, _ := io.ReadAll(resp2.Body)
 	fmt.Println(string(bytes.TrimSpace(b)))
 	// Output:
 	// {"id":"temperature","type":"gauge","value":42.5}
@@ -59,13 +65,19 @@ func Example_updatePathAndGetValue() {
 	defer ts.Close()
 
 	// Update counter via path
-    resp1, _ := http.Post(ts.URL+"/update/counter/hits/10", "text/plain", nil)
-    defer resp1.Body.Close()
+	resp1, err := http.Post(ts.URL+"/update/counter/hits/10", "text/plain", nil)
+	if err != nil {
+		return
+	}
+	defer resp1.Body.Close()
 
 	// Read back as plain text
-    resp, _ := http.Get(ts.URL + "/value/counter/hits")
-    defer resp.Body.Close()
-    b, _ := io.ReadAll(resp.Body)
+	resp, err := http.Get(ts.URL + "/value/counter/hits")
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
 	fmt.Println(string(bytes.TrimSpace(b)))
 	// Output:
 	// 10
